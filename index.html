@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FinFlowApp — Financieel dashboard voor MKB</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#080a0f;color:#e2e8f8;font-family:-apple-system,'Helvetica Neue',sans-serif;min-height:100vh}
+    .header{background:#0d1117;border-bottom:1px solid #1a1f2e;padding:0 28px;height:56px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100}
+    .logo-box{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#4f8ef7,#7c4dff);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .logo-text{font-weight:700;font-size:15px;letter-spacing:-.02em}
+    .company{color:#4a5368;font-size:12px;flex:1}
+    .badge{background:#4f8ef718;color:#4f8ef7;border:1px solid #4f8ef730;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.06em}
+    .badge.live{background:#34d39918;color:#34d399;border-color:#34d39930}
+    .content{padding:24px 28px;max-width:1200px;margin:0 auto;animation:fadeUp .4s ease both}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .upload-zone{border:1.5px dashed #1a1f2e;border-radius:12px;padding:18px 24px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:all .2s;background:#0f1318;margin-bottom:20px}
+    .upload-zone:hover{border-color:#4f8ef760;background:#0f1520}
+    .upload-icon{width:40px;height:40px;border-radius:10px;background:#4f8ef715;border:1px solid #4f8ef730;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+    .upload-title{font-size:13px;font-weight:600;color:#e2e8f8;margin-bottom:4px}
+    .upload-sub{font-size:11px;color:#4a5368}
+    .btn-primary{background:#4f8ef7;color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:11px;font-weight:700;cursor:pointer}
+    .btn-secondary{background:transparent;border:1px solid #1a1f2e;color:#8892aa;border-radius:6px;padding:6px 14px;font-size:11px;cursor:pointer}
+    .btn-secondary:hover{border-color:#4f8ef7;color:#4f8ef7}
+    .success-bar{background:#34d39910;border:1px solid #34d39928;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:20px;display:none}
+    .insight-bar{background:#0f1318;border:1px solid #1a1f2e;border-radius:8px;padding:10px 16px;display:flex;align-items:center;gap:10px;margin-bottom:16px}
+    .insight-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#34d399;box-shadow:0 0 6px #34d399}
+    .insight-text{font-size:11px;color:#8892aa}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+    .kpi-card{background:#0f1318;border:1px solid #1a1f2e;border-radius:14px;padding:18px 20px;transition:border-color .2s}
+    .kpi-card:hover{border-color:#4f8ef740}
+    .kpi-label{font-size:10px;color:#4a5368;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+    .kpi-value{font-size:24px;font-weight:700;letter-spacing:-.03em;margin-bottom:8px;line-height:1}
+    .kpi-delta{font-size:11px;font-weight:700}
+    .kpi-sub{font-size:10px;color:#4a5368;margin-left:6px}
+    .pos{color:#34d399}.neg{color:#f87171}.purp{color:#a78bfa}
+    .charts-row{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+    .card{background:#0f1318;border:1px solid #1a1f2e;border-radius:14px;padding:20px}
+    .card-title{font-size:15px;font-weight:600;margin-bottom:4px}
+    .card-sub{font-size:11px;color:#4a5368;margin-bottom:16px}
+    .chart-wrap{position:relative;height:200px}
+    .pie-wrap{position:relative;height:160px;margin-bottom:14px}
+    .legend{display:flex;flex-direction:column;gap:8px}
+    .legend-item{display:flex;align-items:center;gap:8px;font-size:11px}
+    .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .forecast-card{background:#0f1318;border:1px solid #a78bfa30;border-radius:14px;padding:16px 20px;margin-bottom:14px}
+    .fc-grid{display:grid;grid-template-columns:repeat(3,1fr)}
+    .fc-month{padding:0 18px;border-left:1px solid #1a1f2e}
+    .fc-month:first-child{padding-left:0;border-left:none}
+    .fc-label{font-size:10px;color:#4a5368;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+    .fc-item{margin-bottom:8px}
+    .fc-item-label{font-size:10px;color:#4a5368;margin-bottom:2px}
+    .fc-item-value{font-size:16px;font-weight:700}
+    .footer{display:flex;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid #1a1f2e;margin-top:14px}
+    .footer-text{font-size:10px;color:#4a5368}
+    input[type=file]{display:none}
+    .ml-auto{margin-left:auto}
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="logo-box">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="7" width="3" height="6" rx="1" fill="white" fill-opacity=".9"/>
+      <rect x="5.5" y="4" width="3" height="9" rx="1" fill="white"/>
+      <rect x="10" y="1" width="3" height="12" rx="1" fill="white" fill-opacity=".7"/>
+    </svg>
+  </div>
+  <span class="logo-text">FinFlowApp</span>
+  <span class="company" id="companyName">Demo — Bakker & Zonen B.V.</span>
+  <span class="badge" id="dataBadge">DEMO</span>
+</div>
+
+<div class="content">
+  <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+    <div class="upload-icon">📊</div>
+    <div>
+      <div class="upload-title">Upload jouw Excel</div>
+      <div class="upload-sub">Sheet 1: Maand | Omzet | Kosten &nbsp;·&nbsp; Lokaal verwerkt · GDPR-proof</div>
+    </div>
+    <button class="btn-secondary ml-auto" onclick="event.stopPropagation();dlTemplate()">↓ Sjabloon</button>
+    <button class="btn-primary">Uploaden</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)"/>
+  </div>
+
+  <div class="success-bar" id="successBar">
+    <span style="color:#34d399;font-size:14px">✓</span>
+    <span id="successName" style="font-size:12px;font-weight:600;color:#e2e8f8"></span>
+    <span style="font-size:10px;color:#4a5368">— lokaal verwerkt · niet opgeslagen</span>
+    <button class="btn-secondary ml-auto" onclick="resetData()">← Demo</button>
+  </div>
+
+  <div class="insight-bar">
+    <div class="insight-dot" id="iDot"></div>
+    <div class="insight-text"><b style="color:#4a5368">AI INZICHT &nbsp;·&nbsp; </b><span id="iText"></span></div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Omzet MTD</div><div class="kpi-value" id="k1">—</div><div><span class="kpi-delta" id="k1d"></span><span class="kpi-sub">vs vorige maand</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">Bruto marge</div><div class="kpi-value" id="k2">—</div><div><span class="kpi-delta" id="k2d"></span><span class="kpi-sub">vs vorige maand</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">Kosten MTD</div><div class="kpi-value" id="k3">—</div><div><span class="kpi-delta" id="k3d"></span><span class="kpi-sub">vs vorige maand</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">Jaarprognose</div><div class="kpi-value purp" id="k4">—</div><div><span class="kpi-delta purp">PROGNOSE</span><span class="kpi-sub">3M trend</span></div></div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="card-title">Omzet & Marge</div>
+      <div class="card-sub" id="chartSub"></div>
+      <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Kostenverdeling</div>
+      <div class="card-sub">Huidige maand</div>
+      <div class="pie-wrap"><canvas id="pieChart"></canvas></div>
+      <div class="legend" id="pieLegend"></div>
+    </div>
+  </div>
+
+  <div class="forecast-card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span class="badge" style="background:#a78bfa18;color:#a78bfa;border-color:#a78bfa30">PROGNOSE 3 MAANDEN</span>
+      <span style="font-size:10px;color:#4a5368">Lineaire regressie op historische data</span>
+    </div>
+    <div class="fc-grid" id="fcGrid"></div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-text">FinFlowApp &nbsp;·&nbsp; <span id="footerInfo">Demo data</span> &nbsp;·&nbsp; <span id="footerDate"></span></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary">PDF exporteren</button>
+      <button class="btn-secondary">Instellingen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DR=[{m:"Jul",o:84200,k:61300},{m:"Aug",o:79400,k:58200},{m:"Sep",o:91800,k:63100},{m:"Okt",o:97300,k:67400},{m:"Nov",o:103600,k:71200},{m:"Dec",o:118400,k:79800},{m:"Jan",o:94100,k:68300},{m:"Feb",o:88700,k:64900},{m:"Mrt",o:105200,k:72100},{m:"Apr",o:112800,k:76400},{m:"Mei",o:119600,k:80200}];
+const DK=[{n:"Personeel",v:44200},{n:"Inkoop",v:19300},{n:"Huisvesting",v:8100},{n:"Marketing",v:4900},{n:"Overig",v:3700}];
+const PC=["#4f8ef7","#34d399","#a78bfa","#fbbf24","#f87171"];
+const MN=["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
+let rev=[...DR],kost=[...DK],MC=null,PC2=null,iIdx=0,iTimer=null;
+const f=n=>"€"+Math.round(n).toLocaleString("nl-NL");
+const fk=n=>n>=1000?"€"+(n/1000).toFixed(0)+"k":f(n);
+const fp=n=>(n*100).toFixed(1)+"%";
+function lr(v){const n=v.length,sx=v.reduce((_,__,i)=>_+i,0),sy=v.reduce((s,x)=>s+x,0),sxy=v.reduce((s,x,i)=>s+i*x,0),sx2=v.reduce((s,_,i)=>s+i*i,0),sl=(n*sxy-sx*sy)/(n*sx2-sx*sx);return{sl,ic:(sy-sl*sx)/n}}
+function fc(d,n=3){const or=lr(d.map(r=>r.o)),kr=lr(d.map(r=>r.k)),li=d.length-1,lm=MN.indexOf(d[d.length-1].m);return Array.from({length:n},(_,i)=>{const o=Math.max(0,Math.round(or.ic+or.sl*(li+i+1))),k=Math.max(0,Math.round(kr.ic+kr.sl*(li+i+1)));return{m:MN[(lm+i+1)%12],o,k,fc:true}})}
+function render(){
+  const l=rev[rev.length-1],p=rev[rev.length-2];
+  const mg=l?(l.o-l.k)/l.o:0,pm=p?(p.o-p.k)/p.o:0;
+  const tot=rev.reduce((s,r)=>s+r.o,0);
+  const fcd=fc(rev,3),jp=tot+fcd.reduce((s,r)=>s+r.o,0);
+  // KPIs
+  if(l){
+    document.getElementById("k1").textContent=f(l.o);
+    const d1=p?((l.o-p.o)/p.o*100).toFixed(1):0;
+    const e1=document.getElementById("k1d");e1.textContent=(d1>=0?"+":"")+d1+"%";e1.className="kpi-delta "+(d1>=0?"pos":"neg");
+    document.getElementById("k2").textContent=fp(mg);
+    const d2=((mg-pm)*100).toFixed(1);
+    const e2=document.getElementById("k2d");e2.textContent=(d2>=0?"+":"")+d2+"pp";e2.className="kpi-delta "+(d2>=0?"pos":"neg");
+    document.getElementById("k3").textContent=f(l.k);
+    const d3=p?((l.k-p.k)/p.k*100).toFixed(1):0;
+    const e3=document.getElementById("k3d");e3.textContent=(d3>=0?"+":"")+d3+"%";e3.className="kpi-delta "+(d3<=0?"pos":"neg");
+    document.getElementById("k4").textContent=fk(jp);
+  }
+  document.getElementById("chartSub").textContent=rev.length+" maanden · totaal "+f(tot);
+  // Main chart
+  const cb=[...rev,...fcd],lb=cb.map(r=>r.m+(r.fc?" (P)":""));
+  if(MC)MC.destroy();
+  MC=new Chart(document.getElementById("mainChart"),{type:"line",data:{labels:lb,datasets:[
+    {label:"Omzet",data:cb.map(r=>r.o),borderColor:"#4f8ef7",backgroundColor:"#4f8ef715",fill:true,tension:.4,pointRadius:0,borderWidth:2,segment:{borderDash:ctx=>ctx.p0DataIndex>=rev.length-1?[6,3]:undefined}},
+    {label:"Marge",data:cb.map(r=>r.o-r.k),borderColor:"#34d399",backgroundColor:"#34d39910",fill:true,tension:.4,pointRadius:0,borderWidth:2,segment:{borderDash:ctx=>ctx.p0DataIndex>=rev.length-1?[6,3]:undefined}}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#0d1117",borderColor:"#1a1f2e",borderWidth:1,titleColor:"#4a5368",bodyColor:"#e2e8f8",callbacks:{label:ctx=>ctx.dataset.label+": "+f(ctx.raw)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:10}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+  // Pie
+  const tk=kost.reduce((s,k)=>s+k.v,0);
+  if(PC2)PC2.destroy();
+  PC2=new Chart(document.getElementById("pieChart"),{type:"doughnut",data:{labels:kost.map(k=>k.n),datasets:[{data:kost.map(k=>k.v),backgroundColor:PC,borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"65%",plugins:{legend:{display:false},tooltip:{backgroundColor:"#0d1117",borderColor:"#1a1f2e",borderWidth:1,bodyColor:"#e2e8f8",callbacks:{label:ctx=>ctx.label+": "+f(ctx.raw)+" ("+Math.round(ctx.raw/tk*100)+"%)"}}}}});
+  document.getElementById("pieLegend").innerHTML=kost.slice(0,5).map((k,i)=>`<div class="legend-item"><div class="dot" style="background:${PC[i]}"></div><span style="color:#8892aa;flex:1">${k.n}</span><span style="font-weight:700">${Math.round(k.v/tk*100)}%</span><span style="color:#4a5368;font-size:10px;min-width:48px;text-align:right">${fk(k.v)}</span></div>`).join("");
+  // Forecast
+  document.getElementById("fcGrid").innerHTML=fcd.map(m=>`<div class="fc-month"><div class="fc-label">${m.m}</div><div class="fc-item"><div class="fc-item-label">Omzet</div><div class="fc-item-value" style="color:#4f8ef7">${f(m.o)}</div></div><div class="fc-item"><div class="fc-item-label">Kosten</div><div class="fc-item-value" style="color:#fbbf24">${f(m.k)}</div></div><div class="fc-item"><div class="fc-item-label">Marge</div><div class="fc-item-value" style="color:${(m.o-m.k)/m.o>=.3?"#34d399":"#f87171"}">${f(m.o-m.k)} <span style="font-size:11px">${fp((m.o-m.k)/m.o)}</span></div></div></div>`).join("");
+  // Insights
+  if(l){
+    const ins=[
+      {pos:l.o>=(p?.o||0),text:`Omzet ${l.m}: ${f(l.o)} — ${l.o>=(p?.o||0)?"+":""}${p?((l.o-p.o)/p.o*100).toFixed(1):0}% t.o.v. vorige maand.`},
+      {pos:mg>=.30,text:`Bruto marge ${fp(mg)} — ${mg>=.30?"boven":"onder"} de 30%-drempel.`},
+      {pos:true,text:`Grootste kostenpost: ${kost[0]?.n} (${Math.round(kost[0]?.v/tk*100)}%) — ${f(kost[0]?.v)}.`}
+    ];
+    if(iTimer)clearInterval(iTimer);
+    const show=()=>{const x=ins[iIdx%ins.length];document.getElementById("iText").textContent=x.text;const d=document.getElementById("iDot");d.style.background=x.pos?"#34d399":"#f87171";d.style.boxShadow=`0 0 6px ${x.pos?"#34d399":"#f87171"}`;iIdx++;};
+    show();iTimer=setInterval(show,5000);
+  }
+  document.getElementById("footerDate").textContent=new Date().toLocaleDateString("nl-NL",{day:"numeric",month:"long",year:"numeric"});
+}
+function handleFile(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:"array"});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:0});
+      const ld=rows.map(r=>({m:String(r["Maand"]||r["maand"]||Object.values(r)[0]),o:parseFloat(r["Omzet"]||r["omzet"]||0),k:parseFloat(r["Kosten"]||r["kosten"]||0)})).filter(r=>r.o>0);
+      if(!ld.length){alert("Kolomnamen niet herkend. Gebruik: Maand | Omzet | Kosten");return;}
+      rev=ld;
+      if(wb.SheetNames.length>1){const r2=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[1]],{defval:0});const k2=r2.map(r=>({n:String(r["Categorie"]||r["categorie"]||Object.values(r)[0]),v:parseFloat(r["Bedrag"]||r["bedrag"]||0)})).filter(r=>r.v>0);if(k2.length)kost=k2;}
+      document.getElementById("uploadZone").style.display="none";
+      const sb=document.getElementById("successBar");sb.style.display="flex";
+      document.getElementById("successName").textContent=file.name;
+      document.getElementById("dataBadge").textContent="LIVE DATA";document.getElementById("dataBadge").className="badge live";
+      document.getElementById("companyName").textContent=file.name.replace(/\.(xlsx|xls)$/i,"");
+      document.getElementById("footerInfo").textContent="Eigen data · lokaal verwerkt";
+      render();
+    }catch(err){alert("Fout: "+err.message);}
+  };r.readAsArrayBuffer(file);
+}
+function resetData(){rev=[...DR];kost=[...DK];document.getElementById("uploadZone").style.display="flex";document.getElementById("successBar").style.display="none";document.getElementById("dataBadge").textContent="DEMO";document.getElementById("dataBadge").className="badge";document.getElementById("companyName").textContent="Demo — Bakker & Zonen B.V.";document.getElementById("fileInput").value="";document.getElementById("footerInfo").textContent="Demo data";render();}
+function dlTemplate(){const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Maand","Omzet","Kosten"],["Jan",85000,62000],["Feb",91000,65000],["Mrt",98000,70000],["Apr",103000,73000],["Mei",112000,78000]]),"Maanddata");XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Categorie","Bedrag"],["Personeel",42000],["Inkoop",18000],["Huisvesting",8000],["Marketing",5000],["Overig",4000]]),"Kostendata");XLSX.writeFile(wb,"FinFlowApp_Sjabloon.xlsx");}
+window.onload=render;
+</script>
+</body>
+</html>
