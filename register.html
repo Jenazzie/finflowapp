@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FinFlowApp — Account aanmaken</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080a0f;color:#e2e8f8;font-family:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+.page{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:#0d1117;border:1px solid #1a1f2e;border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:0 24px 64px rgba(0,0,0,0.5)}
+.logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:32px}
+.logo-box{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#4f8ef7,#7c4dff);display:flex;align-items:center;justify-content:center}
+.logo-text{font-weight:700;font-size:18px;letter-spacing:-.02em}
+h1{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px;text-align:center}
+.subtitle{font-size:13px;color:#8892aa;text-align:center;margin-bottom:28px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{margin-bottom:14px}
+label{display:block;font-size:12px;font-weight:600;color:#8892aa;margin-bottom:6px;letter-spacing:.02em}
+input,select{width:100%;background:#0f1318;border:1px solid #1a1f2e;color:#e2e8f8;border-radius:8px;padding:11px 14px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:#4f8ef760}
+input::placeholder{color:#4a5368}
+select option{background:#0f1318}
+.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.plan-option{border:1px solid #1a1f2e;border-radius:8px;padding:10px 8px;cursor:pointer;text-align:center;transition:all .15s;background:#0f1318}
+.plan-option:hover{border-color:#4f8ef740}
+.plan-option.selected{border-color:#4f8ef7;background:#4f8ef710}
+.plan-option.selected .plan-name{color:#4f8ef7}
+.plan-name{font-size:11px;font-weight:700;color:#8892aa;margin-bottom:2px}
+.plan-price{font-size:13px;font-weight:700;color:#e2e8f8}
+.plan-period{font-size:9px;color:#4a5368}
+.btn{width:100%;border:none;border-radius:9px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;margin-top:4px}
+.btn-primary{background:linear-gradient(135deg,#4f8ef7,#7c4dff);color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.alert{border-radius:8px;padding:11px 14px;font-size:13px;margin-bottom:16px;display:none}
+.alert-error{background:#f8717112;border:1px solid #f8717140;color:#f87171}
+.alert-success{background:#34d39912;border:1px solid #34d39940;color:#34d399}
+.loading{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.terms{font-size:11px;color:#4a5368;margin-top:14px;text-align:center;line-height:1.5}
+.terms a{color:#4f8ef7}
+.login-link{text-align:center;margin-top:20px;font-size:13px;color:#8892aa}
+.login-link a{color:#4f8ef7;cursor:pointer;font-weight:600}
+.trial-badge{background:#34d39912;border:1px solid #34d39930;border-radius:8px;padding:10px 14px;font-size:12px;color:#34d399;text-align:center;margin-bottom:20px}
+footer{text-align:center;padding:16px;font-size:11px;color:#4a5368}
+footer a{color:#4a5368}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="card">
+    <div class="logo">
+      <div class="logo-box">
+        <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
+          <rect x="1" y="7" width="3" height="6" rx="1" fill="white" fill-opacity=".9"/>
+          <rect x="5.5" y="4" width="3" height="9" rx="1" fill="white"/>
+          <rect x="10" y="1" width="3" height="12" rx="1" fill="white" fill-opacity=".7"/>
+        </svg>
+      </div>
+      <span class="logo-text">FinFlowApp</span>
+    </div>
+
+    <h1>Account aanmaken</h1>
+    <p class="subtitle">14 dagen gratis proberen · Geen creditcard vereist</p>
+
+    <div class="trial-badge">✓ Gratis proefperiode · Opzeggen wanneer je wil · Setup in 10 minuten</div>
+
+    <div class="alert alert-error" id="errorMsg"></div>
+    <div class="alert alert-success" id="successMsg"></div>
+
+    <div id="registerForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Voornaam</label>
+          <input type="text" id="firstName" placeholder="Jan"/>
+        </div>
+        <div class="form-group">
+          <label>Achternaam</label>
+          <input type="text" id="lastName" placeholder="de Vries"/>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Bedrijfsnaam</label>
+        <input type="text" id="company" placeholder="Bakker & Zonen B.V."/>
+      </div>
+
+      <div class="form-group">
+        <label>E-mailadres</label>
+        <input type="email" id="email" placeholder="jan@jouwbedrijf.nl" autocomplete="email"/>
+      </div>
+
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input type="password" id="password" placeholder="Minimaal 8 tekens" autocomplete="new-password"/>
+      </div>
+
+      <div class="form-group">
+        <label>Kies je pakket (14 dagen gratis)</label>
+        <div class="plan-grid">
+          <div class="plan-option" onclick="selectPlan('starter',this)">
+            <div class="plan-name">STARTER</div>
+            <div class="plan-price">€79</div>
+            <div class="plan-period">/maand</div>
+          </div>
+          <div class="plan-option selected" onclick="selectPlan('pro',this)">
+            <div class="plan-name">PRO</div>
+            <div class="plan-price">€179</div>
+            <div class="plan-period">/maand</div>
+          </div>
+          <div class="plan-option" onclick="selectPlan('business',this)">
+            <div class="plan-name">BUSINESS</div>
+            <div class="plan-price">€349</div>
+            <div class="plan-period">/maand</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="registerBtn" onclick="register()">
+        Account aanmaken →
+      </button>
+
+      <div class="terms">
+        Door te registreren ga je akkoord met onze
+        <a href="#">Algemene voorwaarden</a> en <a href="#">Privacybeleid</a>
+      </div>
+    </div>
+
+    <div class="login-link">
+      Al een account? <a onclick="window.location.href='login.html'">Inloggen</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <a href="index.html">← Terug naar finflowapp.ai</a> &nbsp;·&nbsp;
+  <a href="#">Privacy</a> &nbsp;·&nbsp;
+  <a href="mailto:info@finflowapp.ai">Contact</a>
+</footer>
+
+<script>
+const SUPABASE_URL = "https://jombvmzuwmtdbejvrnjx.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvbWJ2bXp1d210ZGJlanZybmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MzU1NjQsImV4cCI6MjA5NDQxMTU2NH0.rg6qP-Mz91ZVleMUAQiI4iWV-3EpgllZ5F-Vhg9SGiw";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let selectedPlan = "pro";
+
+sb.auth.getSession().then(({data:{session}})=>{
+  if(session) window.location.href = "dashboard.html";
+});
+
+function selectPlan(plan, el){
+  selectedPlan = plan;
+  document.querySelectorAll(".plan-option").forEach(e=>e.classList.remove("selected"));
+  el.classList.add("selected");
+}
+
+function showError(msg){ const el=document.getElementById("errorMsg"); el.textContent=msg; el.style.display="block"; document.getElementById("successMsg").style.display="none"; }
+function showSuccess(msg){ const el=document.getElementById("successMsg"); el.innerHTML=msg; el.style.display="block"; document.getElementById("errorMsg").style.display="none"; }
+
+function setLoading(loading){
+  const btn=document.getElementById("registerBtn");
+  btn.disabled=loading;
+  btn.innerHTML=loading?'<span class="loading"></span>Account aanmaken...':'Account aanmaken →';
+}
+
+async function register(){
+  document.getElementById("errorMsg").style.display="none";
+  const firstName = document.getElementById("firstName").value.trim();
+  const lastName  = document.getElementById("lastName").value.trim();
+  const company   = document.getElementById("company").value.trim();
+  const email     = document.getElementById("email").value.trim();
+  const password  = document.getElementById("password").value;
+
+  if(!firstName||!lastName){ showError("Vul je voor- en achternaam in."); return; }
+  if(!company){ showError("Vul je bedrijfsnaam in."); return; }
+  if(!email){ showError("Vul je e-mailadres in."); return; }
+  if(password.length < 8){ showError("Wachtwoord moet minimaal 8 tekens bevatten."); return; }
+
+  setLoading(true);
+
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password,
+    options:{
+      data:{
+        first_name: firstName,
+        last_name: lastName,
+        company: company,
+        plan: selectedPlan,
+      }
+    }
+  });
+
+  setLoading(false);
+
+  if(error){
+    if(error.message.includes("already registered")) showError("Dit e-mailadres is al geregistreerd. Ga naar inloggen.");
+    else showError(error.message);
+    return;
+  }
+
+  // Save profile to profiles table
+  if(data.user){
+    await sb.from("profiles").upsert({
+      id: data.user.id,
+      email: email,
+      first_name: firstName,
+      last_name: lastName,
+      company: company,
+      plan: selectedPlan,
+      trial_ends_at: new Date(Date.now() + 14*24*60*60*1000).toISOString(),
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  document.getElementById("registerForm").style.display="none";
+  showSuccess(`
+    <strong>✓ Account aangemaakt!</strong><br/>
+    We hebben een bevestigingsmail gestuurd naar <strong>${email}</strong>.<br/>
+    Klik op de link in de mail om je account te activeren.
+  `);
+}
+</script>
+</body>
+</html>
