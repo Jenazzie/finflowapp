@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FinFlowApp — Financieel dashboard voor MKB</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- AUTH CHECK -->
+<script>
+const _sb=supabase.createClient(
+  "https://jombvmzuwmtdbejvrnjx.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvbWJ2bXp1d210ZGJlanZybmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MzU1NjQsImV4cCI6MjA5NDQxMTU2NH0.rg6qP-Mz91ZVleMUAQiI4iWV-3EpgllZ5F-Vhg9SGiw"
+);
+(async()=>{
+  const{data:{session}}=await _sb.auth.getSession();
+  if(!session){window.location.href="login.html";return;}
+  const{data:p}=await _sb.from("profiles").select("*").eq("id",session.user.id).single();
+  window._userProfile=p||{plan:"pro",company:session.user.user_metadata?.company||""};
+  window._userEmail=session.user.email;
+  window._userSession=session.user.id;
+})();
+async function logout(){await _sb.auth.signOut();window.location.href="login.html";}
+</script>
+
+<style>
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080a0f;color:#e2e8f8;font-family:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;min-height:100vh;font-size:14px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#1a1f2e;border-radius:2px}
+/* Header */
+.header{background:#0d1117;border-bottom:1px solid #1a1f2e;padding:0 28px;height:56px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:200}
+.logo-box{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#4f8ef7,#7c4dff);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-text{font-weight:700;font-size:15px;letter-spacing:-.02em}
+.company-name{color:#4a5368;font-size:12px}
+.period-selector{display:flex;gap:4px;background:#0f1318;border:1px solid #1a1f2e;border-radius:8px;padding:4px}
+.period-btn{background:transparent;border:none;color:#4a5368;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;border-radius:5px;transition:all .15s;font-family:inherit}
+.period-btn.active{background:#1a1f2e;color:#e2e8f8}
+.badge{border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.06em}
+.badge-blue{background:#4f8ef718;color:#4f8ef7;border:1px solid #4f8ef730}
+.badge-green{background:#34d39918;color:#34d399;border:1px solid #34d39930}
+.badge-amber{background:#fbbf2418;color:#fbbf24;border:1px solid #fbbf2430}
+.badge-purple{background:#a78bfa18;color:#a78bfa;border:1px solid #a78bfa30}
+.badge-red{background:#f8717118;color:#f87171;border:1px solid #f8717130}
+.ml-auto{margin-left:auto}
+/* Nav tabs */
+.nav-bar{background:#0d1117;border-bottom:1px solid #1a1f2e;border-top:1px solid #1a1f2e;padding:0 28px;display:flex;align-items:center;gap:2px;height:44px;margin:0 -28px 20px}
+.nav-tab{background:transparent;border:none;color:#4a5368;padding:8px 16px;font-size:13px;cursor:pointer;border-radius:6px;transition:all .15s;font-family:inherit;position:relative}
+.nav-tab:hover{color:#8892aa;background:#0f1318}
+.nav-tab.active{color:#e2e8f8;font-weight:600}
+.nav-tab.active::after{content:'';position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);width:20px;height:2px;background:#4f8ef7;border-radius:1px}
+/* Content */
+.content{padding:20px 28px;max-width:1400px;margin:0 auto}
+/* Upload */
+.upload-zone{border:1.5px dashed #1a1f2e;border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .2s;background:#0f1318;margin-bottom:16px}
+.upload-zone:hover{border-color:#4f8ef760;background:#0f1520}
+.upload-icon{width:38px;height:38px;border-radius:9px;background:#4f8ef715;border:1px solid #4f8ef730;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.upload-title{font-size:13px;font-weight:600;color:#e2e8f8;margin-bottom:3px}
+.upload-sub{font-size:10px;color:#4a5368}
+.btn{border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-primary{background:#4f8ef7;color:#fff}
+.btn-primary:hover{background:#3d7ef0}
+.btn-outline{background:transparent;border:1px solid #1a1f2e;color:#8892aa}
+.btn-outline:hover{border-color:#4f8ef7;color:#4f8ef7}
+.success-bar{background:#34d39910;border:1px solid #34d39928;border-radius:12px;padding:11px 16px;display:flex;align-items:center;gap:10px;margin-bottom:16px}
+/* Insight */
+.insight-bar{background:#0f1318;border:1px solid #1a1f2e;border-radius:8px;padding:9px 16px;display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.i-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.i-text{font-size:11px;color:#8892aa;line-height:1.4}
+/* KPIs */
+.kpi-row{display:grid;gap:12px;margin-bottom:12px}
+.kpi-row-3{grid-template-columns:repeat(3,1fr)}
+.kpi-row-4{grid-template-columns:repeat(4,1fr)}
+.kpi-row-5{grid-template-columns:repeat(5,1fr)}
+.kpi-card{background:#0f1318;border:1px solid #1a1f2e;border-radius:13px;padding:16px 18px;transition:border-color .2s;position:relative;overflow:hidden}
+.kpi-card:hover{border-color:#4f8ef740}
+.kpi-glow{position:absolute;top:0;right:0;width:60px;height:60px;pointer-events:none}
+.kpi-label{font-size:10px;color:#4a5368;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.kpi-value{font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:6px;line-height:1}
+.kpi-footer{display:flex;align-items:center;gap:6px}
+.kpi-delta{font-size:11px;font-weight:700}
+.kpi-sub{font-size:10px;color:#4a5368}
+.up{color:#34d399}.dn{color:#f87171}.nt{color:#8892aa}.am{color:#fbbf24}.pu{color:#a78bfa}.bl{color:#4f8ef7}
+/* Divider */
+.section-title{font-size:12px;font-weight:700;color:#4a5368;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 12px;display:flex;align-items:center;gap:10px}
+.section-title::after{content:'';flex:1;height:1px;background:#1a1f2e}
+/* Cards */
+.card{background:#0f1318;border:1px solid #1a1f2e;border-radius:13px;padding:18px}
+.card-title{font-size:14px;font-weight:600;margin-bottom:3px}
+.card-sub{font-size:11px;color:#4a5368;margin-bottom:14px}
+.chart-wrap{position:relative}
+.h200{height:200px}.h180{height:180px}.h160{height:160px}.h140{height:140px}
+/* Grids */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.grid-21{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px}
+.grid-12{display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:12px}
+.grid-31{display:grid;grid-template-columns:3fr 1fr;gap:12px;margin-bottom:12px}
+/* Legend */
+.legend{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:11px}
+.leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.leg-name{color:#8892aa;flex:1}
+.leg-pct{font-weight:700;font-size:11px}
+.leg-val{color:#4a5368;font-size:10px;min-width:50px;text-align:right}
+/* Forecast */
+.fc-card{background:#0f1318;border:1px solid #a78bfa30;border-radius:13px;padding:16px 18px;margin-bottom:12px}
+.fc-tabs{display:flex;gap:4px;margin-bottom:14px}
+.fc-tab{background:transparent;border:1px solid #1a1f2e;color:#4a5368;border-radius:5px;padding:3px 12px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.fc-tab.active{background:#a78bfa20;border-color:#a78bfa60;color:#a78bfa}
+.fc-grid{display:grid;gap:0}
+.fc-month{padding:0 16px;border-left:1px solid #1a1f2e}
+.fc-month:first-child{padding-left:0;border-left:none}
+.fc-mlabel{font-size:10px;color:#4a5368;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.fc-row{margin-bottom:8px}
+.fc-rl{font-size:10px;color:#4a5368;margin-bottom:2px}
+.fc-rv{font-size:15px;font-weight:700}
+/* Table */
+.data-table{width:100%;border-collapse:collapse;font-size:11px}
+.data-table th{color:#4a5368;font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid #1a1f2e;text-transform:uppercase;letter-spacing:.05em;font-size:10px}
+.data-table td{padding:7px 8px;border-bottom:1px solid #0d1117;color:#8892aa}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:#0d1117;color:#e2e8f8}
+.td-val{font-weight:600;color:#e2e8f8;text-align:right}
+.td-delta{text-align:right;font-weight:700;font-size:10px}
+/* Progress bar */
+.prog-wrap{height:4px;background:#1a1f2e;border-radius:2px;margin-top:4px;overflow:hidden}
+.prog-bar{height:100%;border-radius:2px;transition:width .6s ease}
+/* Alert */
+.alert{background:#f8717108;border:1px solid #f8717130;border-left:3px solid #f87171;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#f87171}
+/* Footer */
+.footer{display:flex;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid #1a1f2e;margin-top:16px}
+.footer-text{font-size:10px;color:#4a5368}
+/* Animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.animate{animation:fadeUp .35s ease both}
+/* Responsive — Tablet */
+@media(max-width:1024px){
+  .kpi-row-5{grid-template-columns:repeat(3,1fr)}
+  .grid-31{grid-template-columns:1fr}
+  .chart-wrap.h200{height:180px}
+}
+/* Responsive — Mobiel */
+@media(max-width:768px){
+  .header{padding:0 16px;gap:10px}
+  .logo-text{font-size:13px}
+  .company-name{display:none}
+  .period-selector{display:none}
+  .nav-bar{padding:0 12px;gap:0;overflow-x:auto}
+  .nav-tab{padding:6px 10px;font-size:12px}
+  .content{padding:14px 16px}
+  .kpi-row-4,.kpi-row-5{grid-template-columns:repeat(2,1fr);gap:10px}
+  .kpi-value{font-size:18px!important}
+  .kpi-label{font-size:9px}
+  .grid-21,.grid-31,.grid-12,.grid-2,.grid-3{grid-template-columns:1fr!important;gap:10px}
+  .chart-wrap.h200,.chart-wrap.h180{height:180px}
+  .chart-wrap.h160,.chart-wrap.h140{height:140px}
+  .card{padding:14px}
+  .card-title{font-size:13px}
+  .section-title{font-size:10px;margin:14px 0 10px}
+  .upload-zone{flex-wrap:wrap;gap:10px;padding:14px}
+  .upload-zone .ml-auto{margin-left:0}
+  .fc-grid{grid-template-columns:1fr!important;gap:10px}
+  .fc-month{padding:0!important;border-left:none!important;border-top:1px solid #1a1f2e;padding-top:12px!important;margin-top:4px}
+  .fc-month:first-child{border-top:none;padding-top:0!important;margin-top:0}
+  .data-table{font-size:10px}
+  .data-table th,.data-table td{padding:5px 6px}
+  .footer{flex-direction:column;gap:10px;text-align:center}
+  #welcomeScreen{padding:30px 16px}
+  #welcomeScreen h2{font-size:20px}
+  #welcomeScreen p{font-size:13px}
+  #welcomeScreen .step-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:480px){
+  .kpi-row-4,.kpi-row-5{grid-template-columns:1fr 1fr}
+  .plan-grid{grid-template-columns:1fr}
+}
+/* Print / PDF */
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body{background:#fff!important;color:#111!important;font-size:9pt}
+  .header{background:#1e2235!important;color:#fff!important;position:relative!important;height:auto;padding:10px 20px;border:none}
+  .logo-text{color:#fff!important}
+  .nav-bar,.upload-zone,.success-bar,.insight-bar,.footer,.fc-tabs,.period-selector,.btn,.badge-blue{display:none!important}
+  .badge-green{display:inline-block!important}
+  .content{padding:10px 14px!important;max-width:100%!important;animation:none!important}
+  .kpi-card{background:#f0f4ff!important;border:1px solid #c8d6f0!important;break-inside:avoid;padding:12px!important}
+  .kpi-value{color:#1e2235!important;font-size:15pt!important}
+  .kpi-label{color:#666!important;font-size:8pt!important}
+  .kpi-delta{font-size:9pt!important}
+  .up{color:#16a34a!important}.dn{color:#dc2626!important}.bl{color:#2563eb!important}.pu{color:#7c3aed!important}.am{color:#d97706!important}
+  .card{background:#f8faff!important;border:1px solid #c8d6f0!important;break-inside:avoid;margin-bottom:10px!important}
+  .card-title{color:#1e2235!important;font-size:11pt!important}
+  .card-sub{color:#666!important;font-size:8pt!important}
+  .section-title{color:#1e2235!important;font-size:9pt!important;margin:14px 0 8px!important}
+  .section-title::after{background:#c8d6f0!important}
+  .kpi-row{gap:8px!important;margin-bottom:10px!important}
+  .kpi-row-4{grid-template-columns:repeat(4,1fr)!important}
+  .kpi-row-5{grid-template-columns:repeat(5,1fr)!important}
+  .grid-21,.grid-31{display:grid!important;grid-template-columns:2fr 1fr!important;gap:10px!important}
+  .grid-2{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important}
+  [id^="tab-"]{display:none!important}
+  #tab-overview{display:block!important}
+  .fc-card{background:#f8f0ff!important;border:1px solid #d8b4fe!important;break-inside:avoid}
+  .data-table th{background:#1e2235!important;color:#fff!important;font-size:8pt!important;padding:5px!important}
+  .data-table td{color:#333!important;font-size:8pt!important;padding:5px!important}
+  .data-table tr:hover td{background:transparent!important}
+  .prog-wrap{background:#e2e8f0!important}
+  .prog-bar{print-color-adjust:exact!important}
+  canvas{max-height:180px!important}
+  .print-info{display:block!important;font-size:8pt;color:#666;text-align:right;margin-bottom:8px}
+  @page{margin:1.2cm;size:A4 landscape}
+}
+input[type=file]{display:none}
+/* Drag & Drop */
+.upload-zone{transition:all .2s;border:1.5px dashed #1a1f2e}
+.upload-zone.drag-over{border-color:#4f8ef7!important;background:#4f8ef710!important;transform:scale(1.01)}
+.upload-zone.drag-over .upload-title{color:#4f8ef7}
+.upload-zone.drag-over .upload-icon{transform:scale(1.15);transition:transform .2s}
+/* Loading spinner */
+#loadingScreen{position:fixed;top:0;left:0;width:100%;height:100%;background:#080a0f;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+.spinner{width:40px;height:40px;border:3px solid #1a1f2e;border-top:3px solid #4f8ef7;border-radius:50%;animation:spin .8s linear infinite}
+.spinner-text{font-size:13px;color:#4a5368;letter-spacing:.04em}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Chart fade-in */
+.chart-fade{opacity:0;transition:opacity .5s ease}
+.chart-fade.loaded{opacity:1}
+.print-info{display:none}
+/* Verberg alles totdat auth check klaar is */
+#dashboardContent{display:none}
+#welcomeScreen{display:none}
+
+
+/* Premium AI design upgrades */
+:root{
+  --accent:#4f8ef7;
+  --accent2:#7c4dff;
+  --green:#34d399;
+  --amber:#fbbf24;
+  --red:#f87171;
+  --surface:#0d1117;
+  --card:#0f1318;
+  --border:#1a1f2e;
+}
+
+/* Animated gradient header */
+.header{
+  background:linear-gradient(135deg,#0d1117 0%,#0f1520 50%,#0d1117 100%);
+  border-bottom:1px solid rgba(79,142,247,0.15);
+}
+.header::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,#4f8ef750,#7c4dff50,transparent);
+}
+.header{position:sticky;top:0;z-index:200;overflow:hidden;}
+
+/* Glowing logo */
+.logo-box{
+  box-shadow:0 0 16px rgba(79,142,247,0.4);
+  animation:logo-pulse 3s ease-in-out infinite;
+}
+@keyframes logo-pulse{0%,100%{box-shadow:0 0 16px rgba(79,142,247,0.3)}50%{box-shadow:0 0 24px rgba(124,77,255,0.5)}}
+
+/* Premium KPI cards */
+.kpi-card{
+  background:linear-gradient(135deg,#0f1318 0%,#111825 100%);
+  border:1px solid rgba(255,255,255,0.06);
+  backdrop-filter:blur(10px);
+  transition:all .25s cubic-bezier(.4,0,.2,1);
+}
+.kpi-card:hover{
+  border-color:rgba(79,142,247,0.3);
+  transform:translateY(-2px);
+  box-shadow:0 8px 32px rgba(0,0,0,0.4),0 0 0 1px rgba(79,142,247,0.1);
+}
+.kpi-value{
+  background:linear-gradient(135deg,#e2e8f8,#8892aa);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.kpi-value.bl{background:linear-gradient(135deg,#4f8ef7,#7c4dff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.kpi-value.up{background:linear-gradient(135deg,#34d399,#0ea5e9);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.kpi-value.pu{background:linear-gradient(135deg,#a78bfa,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.kpi-value.am{background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+
+/* Premium cards */
+.card{
+  background:linear-gradient(135deg,#0f1318 0%,#111825 100%);
+  border:1px solid rgba(255,255,255,0.06);
+  backdrop-filter:blur(10px);
+  transition:border-color .2s ease;
+}
+.card:hover{border-color:rgba(79,142,247,0.2);}
+
+/* AI insight bar — premium */
+.insight-bar{
+  background:linear-gradient(135deg,rgba(79,142,247,0.05),rgba(124,77,255,0.05));
+  border:1px solid rgba(79,142,247,0.15);
+  position:relative;overflow:hidden;
+}
+.insight-bar::before{
+  content:'';position:absolute;top:0;left:-100%;width:100%;height:1px;
+  background:linear-gradient(90deg,transparent,#4f8ef7,transparent);
+  animation:scan 4s ease-in-out infinite;
+}
+@keyframes scan{0%{left:-100%}100%{left:100%}}
+
+/* Upload zone premium */
+.upload-zone{
+  background:linear-gradient(135deg,rgba(79,142,247,0.03),rgba(124,77,255,0.03));
+  border:1.5px dashed rgba(79,142,247,0.25);
+  transition:all .25s ease;
+}
+.upload-zone:hover{
+  border-color:rgba(79,142,247,0.5);
+  background:linear-gradient(135deg,rgba(79,142,247,0.06),rgba(124,77,255,0.06));
+  box-shadow:0 0 30px rgba(79,142,247,0.08);
+}
+
+/* Nav tabs premium */
+.nav-tab.active::after{
+  background:linear-gradient(90deg,#4f8ef7,#7c4dff);
+  box-shadow:0 0 8px rgba(79,142,247,0.5);
+}
+
+/* Section titles */
+.section-title{
+  background:linear-gradient(90deg,#4f8ef7,#7c4dff);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+
+/* Badge premium */
+.badge-green{
+  background:linear-gradient(135deg,rgba(52,211,153,0.15),rgba(14,165,233,0.15));
+  color:#34d399;border:1px solid rgba(52,211,153,0.3);
+  box-shadow:0 0 8px rgba(52,211,153,0.2);
+}
+
+/* Spinner premium */
+.spinner{border-top-color:#4f8ef7;box-shadow:0 0 16px rgba(79,142,247,0.3);}
+
+/* Table premium */
+.data-table th{
+  background:linear-gradient(135deg,#111825,#0f1318);
+  border-bottom:1px solid rgba(79,142,247,0.2);
+}
+.data-table tr:hover td{background:rgba(79,142,247,0.04)!important;}
+
+/* Forecast card */
+.fc-card{
+  background:linear-gradient(135deg,rgba(167,139,250,0.05),rgba(236,72,153,0.03));
+  border:1px solid rgba(167,139,250,0.2);
+}
+
+/* Button premium */
+.btn-primary{
+  background:linear-gradient(135deg,#4f8ef7,#7c4dff);
+  box-shadow:0 4px 16px rgba(79,142,247,0.3);
+  border:none;
+}
+.btn-primary:hover{
+  box-shadow:0 6px 24px rgba(79,142,247,0.4);
+  transform:translateY(-1px);
+}
+
+/* Period selector */
+.period-btn.active{
+  background:linear-gradient(135deg,rgba(79,142,247,0.2),rgba(124,77,255,0.2));
+  color:#e2e8f8;
+  border:1px solid rgba(79,142,247,0.3);
+}
+
+/* Success bar */
+.success-bar{
+  background:linear-gradient(135deg,rgba(52,211,153,0.08),rgba(14,165,233,0.05));
+  border:1px solid rgba(52,211,153,0.2);
+}
+
+/* Scrollbar premium */
+::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,#4f8ef740,#7c4dff40);
+  border-radius:3px;
+}
+
+</style>
+</head>
+<body>
+<script>
+// Voorkom dat browser naar bestand navigeert bij drop buiten dropzone
+document.addEventListener("dragover", e=>e.preventDefault());
+document.addEventListener("drop", e=>e.preventDefault());
+</script>
+
+<!-- Globale file input -->
+<input type="file" id="fi" accept=".xlsx,.xls" onchange="handleFile(event)" style="display:none"/>
+
+<!-- LOADING SCREEN -->
+<div id="loadingScreen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#080a0f;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+  <script>window._spinnerStart=Date.now();</script>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+    <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#4f8ef7,#7c4dff);display:flex;align-items:center;justify-content:center">
+      <svg width="16" height="16" viewBox="0 0 14 14" fill="none"><rect x="1" y="7" width="3" height="6" rx="1" fill="white" fill-opacity=".9"/><rect x="5.5" y="4" width="3" height="9" rx="1" fill="white"/><rect x="10" y="1" width="3" height="12" rx="1" fill="white" fill-opacity=".7"/></svg>
+    </div>
+    <span style="font-weight:700;font-size:16px;letter-spacing:-.02em;color:#e2e8f8">FinFlowApp</span>
+  </div>
+  <div class="spinner"></div>
+  <div class="spinner-text">Dashboard laden...</div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo-box">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="7" width="3" height="6" rx="1" fill="white" fill-opacity=".9"/>
+      <rect x="5.5" y="4" width="3" height="9" rx="1" fill="white"/>
+      <rect x="10" y="1" width="3" height="12" rx="1" fill="white" fill-opacity=".7"/>
+    </svg>
+  </div>
+  <span class="logo-text">FinFlowApp</span>
+  <span class="company-name" id="companyName">Dashboard</span>
+  <div style="flex:1"></div>
+  <div class="period-selector">
+    <button class="period-btn" onclick="setPeriod('MTD')">MTD</button>
+    <button class="period-btn active" onclick="setPeriod('YTD')">YTD</button>
+    <button class="period-btn" onclick="setPeriod('12M')">12M</button>
+  </div>
+  <span class="badge badge-blue" id="dataBadge">DEMO</span>
+  <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#4f8ef740,#7c4dff40);border:1px solid #4f8ef740;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#4f8ef7;cursor:pointer" id="userAvatar" onclick="logout()" title="Uitloggen">J</div>
+</div>
+
+<div class="content">
+
+  <!-- WELKOMSTSCHERM -->
+  <div id="welcomeScreen" style="display:none">
+
+    <!-- AI ambient background -->
+    <div style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden">
+      <div style="position:absolute;top:20%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(ellipse,rgba(79,142,247,0.06) 0%,transparent 70%);animation:breathe 6s ease-in-out infinite"></div>
+      <div style="position:absolute;top:70%;left:20%;width:300px;height:300px;background:radial-gradient(ellipse,rgba(124,77,255,0.04) 0%,transparent 70%);animation:breathe 8s ease-in-out infinite reverse"></div>
+    </div>
+
+    <div style="position:relative;z-index:1;max-width:640px;margin:0 auto;padding:60px 24px 40px;text-align:center">
+
+      <!-- AI badge -->
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.2);border-radius:20px;padding:6px 16px;margin-bottom:28px">
+        <div style="width:6px;height:6px;border-radius:50%;background:#4f8ef7;box-shadow:0 0 8px #4f8ef7;animation:pulse-dot 2s ease-in-out infinite"></div>
+        <span style="font-size:11px;font-weight:700;color:#4f8ef7;letter-spacing:.08em">AI-POWERED DASHBOARD</span>
+      </div>
+
+      <!-- Title -->
+      <h1 style="font-size:42px;font-weight:800;letter-spacing:-.04em;line-height:1.1;margin-bottom:16px;background:linear-gradient(135deg,#e2e8f8 30%,#8892aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
+        Financieel inzicht<br/>op directieniveau
+      </h1>
+      <p style="font-size:16px;color:#8892aa;line-height:1.7;margin-bottom:40px;max-width:480px;margin-left:auto;margin-right:auto">
+        Upload je dagelijkse cijfers en krijg direct AI-gestuurde analyses, prognoses en kostensignalen. Jouw data blijft altijd lokaal.
+      </p>
+
+      <!-- Drop zone -->
+      <div id="welcomeDropZone"
+        ondragover="event.preventDefault();event.stopPropagation();this.classList.add('wdz-active')"
+        ondragleave="event.stopPropagation();this.classList.remove('wdz-active')"
+        ondrop="event.preventDefault();event.stopPropagation();this.classList.remove('wdz-active');dropFiles(event.dataTransfer.files)"
+        onclick="document.getElementById('fi').click()"
+        style="position:relative;border:2px dashed rgba(79,142,247,0.25);border-radius:20px;padding:48px 32px;cursor:pointer;background:linear-gradient(135deg,rgba(79,142,247,0.04),rgba(124,77,255,0.04));transition:all .3s ease;margin-bottom:20px;overflow:hidden">
+
+        <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,0.4),transparent)"></div>
+        <div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(124,77,255,0.3),transparent)"></div>
+
+        <div style="width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,rgba(79,142,247,0.15),rgba(124,77,255,0.15));border:1px solid rgba(79,142,247,0.2);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 20px;box-shadow:0 0 24px rgba(79,142,247,0.15)">📊</div>
+
+        <div style="font-size:18px;font-weight:700;color:#e2e8f8;margin-bottom:8px;letter-spacing:-.01em">Sleep je Excel hierheen</div>
+        <div style="font-size:13px;color:#4a5368">of klik om te bladeren &nbsp;·&nbsp; .xlsx of .xls &nbsp;·&nbsp; GDPR-proof · lokale verwerking</div>
+      </div>
+
+      <style>
+        @keyframes breathe{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.6}50%{transform:translate(-50%,-50%) scale(1.1);opacity:1}}
+        @keyframes pulse-dot{0%,100%{box-shadow:0 0 8px #4f8ef7}50%{box-shadow:0 0 16px #4f8ef7,0 0 24px rgba(79,142,247,0.3)}}
+        #welcomeDropZone.wdz-active{border-color:rgba(79,142,247,0.6)!important;background:linear-gradient(135deg,rgba(79,142,247,0.08),rgba(124,77,255,0.08))!important;transform:scale(1.01);box-shadow:0 0 40px rgba(79,142,247,0.1)}
+      </style>
+
+      <!-- Buttons -->
+      <div style="display:flex;gap:10px;justify-content:center;margin-bottom:48px;flex-wrap:wrap">
+        <button onclick="document.getElementById('fi').click()" style="background:linear-gradient(135deg,#4f8ef7,#7c4dff);border:none;color:#fff;border-radius:10px;padding:12px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 20px rgba(79,142,247,0.3);transition:all .2s">
+          📂 Bestand kiezen
+        </button>
+        <button onclick="dlTemplate()" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#8892aa;border-radius:10px;padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;backdrop-filter:blur(10px)">
+          ↓ Sjabloon downloaden
+        </button>
+      </div>
+
+      <!-- Features -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:32px">
+        <div style="background:linear-gradient(135deg,rgba(79,142,247,0.06),rgba(124,77,255,0.04));border:1px solid rgba(79,142,247,0.1);border-radius:14px;padding:20px 16px;text-align:left">
+          <div style="font-size:22px;margin-bottom:10px">⚡</div>
+          <div style="font-size:13px;font-weight:700;color:#e2e8f8;margin-bottom:6px">Direct inzicht</div>
+          <div style="font-size:11px;color:#4a5368;line-height:1.5">Upload en krijg binnen seconden een volledig dashboard</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(52,211,153,0.06),rgba(14,165,233,0.04));border:1px solid rgba(52,211,153,0.1);border-radius:14px;padding:20px 16px;text-align:left">
+          <div style="font-size:22px;margin-bottom:10px">🔒</div>
+          <div style="font-size:13px;font-weight:700;color:#e2e8f8;margin-bottom:6px">100% lokaal</div>
+          <div style="font-size:11px;color:#4a5368;line-height:1.5">Jouw financiële data verlaat je computer nooit</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(167,139,250,0.06),rgba(236,72,153,0.04));border:1px solid rgba(167,139,250,0.1);border-radius:14px;padding:20px 16px;text-align:left">
+          <div style="font-size:22px;margin-bottom:10px">🔮</div>
+          <div style="font-size:13px;font-weight:700;color:#e2e8f8;margin-bottom:6px">AI prognose</div>
+          <div style="font-size:11px;color:#4a5368;line-height:1.5">Automatische prognose op 3, 6 en 12 maanden vooruit</div>
+        </div>
+      </div>
+
+      <p style="font-size:11px;color:#2a3040">
+        Vragen? <a href="mailto:info@finflowapp.ai" style="color:#4f8ef7;text-decoration:none">info@finflowapp.ai</a>
+        &nbsp;·&nbsp; <span style="color:#1a1f2e">GDPR-proof · Lokale verwerking · Geen IT nodig</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- DASHBOARD CONTENT -->
+  <div id="dashboardContent" style="display:none">
+
+    <!-- NAV TABS -->
+    <div class="nav-bar">
+      <button class="nav-tab active" onclick="showTab('overview')">Overzicht</button>
+      <button class="nav-tab" onclick="showTab('pnl')">Resultaat</button>
+      <button class="nav-tab" onclick="showTab('cashflow')">Cashflow</button>
+      <button class="nav-tab" onclick="showTab('forecast')">Prognose</button>
+      <button class="nav-tab" onclick="showTab('costs')">Kosten</button>
+    </div>
+
+    <!-- UPLOAD ZONE -->
+    <div class="upload-zone" id="uploadZone"
+      ondragover="event.preventDefault();event.stopPropagation();this.style.borderColor='#4f8ef7';this.style.background='#4f8ef710'"
+      ondragleave="this.style.borderColor='#1a1f2e';this.style.background='transparent'"
+      ondrop="event.preventDefault();event.stopPropagation();this.style.borderColor='#1a1f2e';this.style.background='transparent';dropFiles(event.dataTransfer.files)"
+      onclick="document.getElementById('fi').click()">
+      <div class="upload-icon">📊</div>
+      <div style="flex:1">
+        <div class="upload-title">Sleep je Excel hierheen of klik om te uploaden</div>
+        <div class="upload-sub">Maand · Omzet · Kosten · Budget · Cashflow · Lokaal verwerkt · GDPR-proof</div>
+      </div>
+      <button class="btn btn-outline" onclick="event.stopPropagation();dlTemplate()">↓ Sjabloon</button>
+      <button class="btn btn-primary" onclick="event.stopPropagation();document.getElementById('fi').click()">Uploaden</button>
+    </div>
+
+    <!-- SUCCESS BAR -->
+    <div class="success-bar" id="successBar" style="display:none">
+      <span style="color:#34d399;font-size:14px">✓</span>
+      <span id="successName" style="font-size:12px;font-weight:600;color:#e2e8f8"></span>
+      <span style="font-size:10px;color:#4a5368">— lokaal verwerkt · niet opgeslagen · GDPR-proof</span>
+      <button class="btn btn-outline ml-auto" onclick="resetData()">↩ Nieuwe upload</button>
+    </div>
+
+    <!-- ALERT -->
+    <div class="alert" id="alertBox" style="display:none"></div>
+
+    <!-- INSIGHT -->
+    <div class="insight-bar" id="insightSection">
+      <div class="i-dot" id="iDot" style="background:#34d399;box-shadow:0 0 6px #34d399"></div>
+      <div class="i-text"><b style="color:#4a5368;margin-right:6px">AI INZICHT</b><span id="iText">Laden...</span></div>
+      <div style="display:flex;gap:4px;margin-left:auto" id="iDots"></div>
+    </div>
+
+    <div id="tab-overview" class="animate">
+
+    <div class="section-title">Kernprestaties</div>
+    <div class="kpi-row kpi-row-4">
+      <div class="kpi-card" id="kc1"><div class="kpi-glow" id="kg1"></div><div class="kpi-label">Omzet MTD</div><div class="kpi-value bl" id="k1v">—</div><div class="kpi-footer"><span class="kpi-delta" id="k1d"></span><span class="kpi-sub">vs vorige maand</span></div></div>
+      <div class="kpi-card" id="kc2"><div class="kpi-glow" id="kg2"></div><div class="kpi-label">Bruto marge</div><div class="kpi-value" id="k2v">—</div><div class="kpi-footer"><span class="kpi-delta" id="k2d"></span><span class="kpi-sub">doelstelling 30%</span></div></div>
+      <div class="kpi-card" id="kc3"><div class="kpi-glow" id="kg3"></div><div class="kpi-label">EBITDA (est.)</div><div class="kpi-value" id="k3v">—</div><div class="kpi-footer"><span class="kpi-delta" id="k3d"></span><span class="kpi-sub">vs vorige maand</span></div></div>
+      <div class="kpi-card" id="kc4"><div class="kpi-glow" id="kg4"></div><div class="kpi-label">Cashflow</div><div class="kpi-value" id="k4v">—</div><div class="kpi-footer"><span class="kpi-delta" id="k4d"></span><span class="kpi-sub">operationeel</span></div></div>
+    </div>
+
+    <div class="kpi-row kpi-row-5">
+      <div class="kpi-card"><div class="kpi-label">Omzet YTD</div><div class="kpi-value bl" id="k5v">—</div><div class="kpi-footer"><span class="kpi-sub" id="k5s"></span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Budget realisatie</div><div class="kpi-value" id="k6v">—</div><div class="kpi-footer"><span class="kpi-delta" id="k6d"></span><span class="kpi-sub">van budget</span></div><div class="prog-wrap"><div class="prog-bar" id="k6p" style="background:#4f8ef7;width:0%"></div></div></div>
+      <div class="kpi-card"><div class="kpi-label">Debiteurendagen</div><div class="kpi-value am" id="k7v">—</div><div class="kpi-footer"><span class="kpi-sub">DSO gemiddeld</span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Kosten ratio</div><div class="kpi-value" id="k8v">—</div><div class="kpi-footer"><span class="kpi-delta" id="k8d"></span><span class="kpi-sub">kosten/omzet</span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Jaarprognose</div><div class="kpi-value pu" id="k9v">—</div><div class="kpi-footer"><span class="kpi-delta pu">AI TREND</span><span class="kpi-sub" id="k9s"></span></div></div>
+    </div>
+
+    <div class="section-title">Financiële trends</div>
+    <div class="grid-31">
+      <div class="card">
+        <div class="card-title">Omzet, Marge & Prognose</div>
+        <div class="card-sub" id="mainSub">Actueel + 3M prognose</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="mainChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Budget vs Realisatie</div>
+        <div class="card-sub">Maandelijks</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="budgetChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-21">
+      <div class="card">
+        <div class="card-title">Kostenverloop</div>
+        <div class="card-sub">Operationele kosten per maand</div>
+        <div class="chart-wrap h160 chart-fade"><canvas id="kostenChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Kostenverdeling</div>
+        <div class="card-sub">Huidige periode</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center">
+          <div class="chart-wrap" style="height:160px"><canvas id="pieChart"></canvas></div>
+          <div class="legend" id="pieLegend"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Maandoverzicht</div>
+    <div class="card" style="margin-bottom:12px">
+      <table class="data-table" id="maandTable">
+        <thead><tr><th>Maand</th><th style="text-align:right">Omzet</th><th style="text-align:right">Budget</th><th style="text-align:right">Kosten</th><th style="text-align:right">Marge</th><th style="text-align:right">Marge %</th><th style="text-align:right">EBITDA</th><th style="text-align:right">Δ Omzet</th></tr></thead>
+        <tbody id="maandBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+    <div id="tab-pnl" style="display:none" class="animate">
+    <div class="section-title">Resultatenrekening</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Omzet ontwikkeling</div>
+        <div class="card-sub">Maandelijkse omzet vs vorig jaar</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="pnlChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Marge analyse</div>
+        <div class="card-sub">Bruto marge % per maand</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="margeChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:14px">P&L Samenvatting YTD</div>
+      <table class="data-table" id="pnlTable">
+        <thead><tr><th>Post</th><th style="text-align:right">Bedrag</th><th style="text-align:right">% Omzet</th><th style="text-align:right">vs Budget</th></tr></thead>
+        <tbody id="pnlBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+    <div id="tab-cashflow" style="display:none" class="animate">
+    <div class="section-title">Cashflow overzicht</div>
+    <div class="kpi-row kpi-row-4">
+      <div class="kpi-card"><div class="kpi-label">Operationele CF</div><div class="kpi-value up" id="cf1">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Vrije cashflow</div><div class="kpi-value up" id="cf2">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Kas & Equivalenten</div><div class="kpi-value bl" id="cf3">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Burn rate (est.)</div><div class="kpi-value am" id="cf4">—</div><div class="kpi-footer"><span class="kpi-sub">per maand</span></div></div>
+    </div>
+    <div class="grid-21">
+      <div class="card">
+        <div class="card-title">Cashflow verloop</div>
+        <div class="card-sub">Operationele cashflow per maand</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="cfChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Liquiditeit</div>
+        <div class="card-sub">Kasstand indicatoren</div>
+        <div style="display:flex;flex-direction:column;gap:14px;padding-top:8px">
+          <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px"><span style="color:#8892aa">Current Ratio (est.)</span><span id="cr1" style="font-weight:700;color:#34d399">—</span></div><div class="prog-wrap"><div class="prog-bar" id="crp1" style="background:#34d399;width:0%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px"><span style="color:#8892aa">Kasdekking (maanden)</span><span id="cr2" style="font-weight:700;color:#4f8ef7">—</span></div><div class="prog-wrap"><div class="prog-bar" id="crp2" style="background:#4f8ef7;width:0%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px"><span style="color:#8892aa">DSO Debiteuren</span><span id="cr3" style="font-weight:700;color:#fbbf24">—</span></div><div class="prog-wrap"><div class="prog-bar" id="crp3" style="background:#fbbf24;width:0%"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px"><span style="color:#8892aa">Werkkapitaal ratio</span><span id="cr4" style="font-weight:700;color:#a78bfa">—</span></div><div class="prog-wrap"><div class="prog-bar" id="crp4" style="background:#a78bfa;width:0%"></div></div></div>
+
+    <div id="tab-forecast" style="display:none" class="animate">
+    <div class="section-title">Prognose & Scenario analyse</div>
+    <div class="fc-card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <span class="badge badge-purple">AI PROGNOSE</span>
+        <span style="font-size:11px;color:#4a5368">Lineaire regressie op historische trend</span>
+        <div class="fc-tabs ml-auto">
+          <button class="fc-tab active" onclick="setFcMonths(3,this)">3M</button>
+          <button class="fc-tab" onclick="setFcMonths(6,this)">6M</button>
+          <button class="fc-tab" onclick="setFcMonths(12,this)">12M</button>
+        </div>
+      </div>
+      <div class="fc-grid" id="fcGrid"></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Prognose grafiek</div>
+        <div class="card-sub">Actueel + verwachte ontwikkeling</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="fcChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Scenario analyse</div>
+        <div class="card-sub">Optimistisch / Realistisch / Pessimistisch</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="scenChart"></canvas></div>
+      </div>
+    </div>
+    <div class="kpi-row kpi-row-3" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi-card" style="border-color:#34d39930"><div class="kpi-label up">Optimistisch (+15%)</div><div class="kpi-value up" id="sc1">—</div><div class="kpi-footer"><span class="kpi-sub">jaarprognose</span></div></div>
+      <div class="kpi-card" style="border-color:#a78bfa30"><div class="kpi-label pu">Realistisch (trend)</div><div class="kpi-value pu" id="sc2">—</div><div class="kpi-footer"><span class="kpi-sub">jaarprognose</span></div></div>
+      <div class="kpi-card" style="border-color:#f8717130"><div class="kpi-label dn">Pessimistisch (-15%)</div><div class="kpi-value dn" id="sc3">—</div><div class="kpi-footer"><span class="kpi-sub">jaarprognose</span></div></div>
+    </div>
+  </div>
+
+    <div id="tab-costs" style="display:none" class="animate">
+    <div class="section-title">Kostenanalyse</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Kosten per categorie</div>
+        <div class="card-sub">Absoluut & als % van omzet</div>
+        <div class="chart-wrap h200 chart-fade"><canvas id="kostenBarChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Kostenverdeling</div>
+        <div class="card-sub">Percentage van totaal</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center">
+          <div class="chart-wrap" style="height:180px"><canvas id="pieChart2"></canvas></div>
+          <div class="legend" id="pieLegend2"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px">Kostendetail</div>
+      <table class="data-table">
+        <thead><tr><th>Categorie</th><th style="text-align:right">Bedrag</th><th style="text-align:right">% Totaal</th><th style="text-align:right">% Omzet</th><th style="text-align:right">Trend</th></tr></thead>
+        <tbody id="kostenBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+    <div class="footer">
+    <div class="footer-text">FinFlowApp &nbsp;·&nbsp; <span id="footerInfo">Demo data</span> &nbsp;·&nbsp; <span id="footerDate"></span> &nbsp;·&nbsp; Alle data lokaal verwerkt</div>
+
+  </div><!-- /dashboardContent -->
+
+</div><!-- /content -->
+
+<script>
+
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const DR=[
+  {m:"Jan",o:84200,k:61300,b:90000,cf:18200},{m:"Feb",o:79400,k:58200,b:85000,cf:16800},
+  {m:"Mrt",o:91800,k:63100,b:88000,cf:22400},{m:"Apr",o:97300,k:67400,b:95000,cf:23600},
+  {m:"Mei",o:103600,k:71200,b:100000,cf:26800},{m:"Jun",o:118400,k:79800,b:110000,cf:31200},
+  {m:"Jul",o:94100,k:68300,b:95000,cf:20400},{m:"Aug",o:88700,k:64900,b:90000,cf:19200},
+  {m:"Sep",o:105200,k:72100,b:105000,cf:27600},{m:"Okt",o:112800,k:76400,b:110000,cf:30800},
+  {m:"Nov",o:119600,k:80200,b:115000,cf:33200}
+];
+const DK=[
+  {n:"Personeel",v:44200},{n:"Inkoop",v:19300},{n:"Huisvesting",v:8100},
+  {n:"Marketing",v:4900},{n:"ICT",v:2800},{n:"Overig",v:900}
+];
+const PC=["#4f8ef7","#34d399","#a78bfa","#fbbf24","#f87171","#0ea5e9","#ec4899"];
+const MN=["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
+
+let rev=[...DR],kost=[...DK],fcM=3;
+let balans={debiteuren:48500,kas:32000,voorraad:15200,overigeVlot:4800,crediteuren:22400,belasting:8200,overigeKort:3100,omzet12mnd:1180000};
+let charts={};
+let iIdx=0,iTimer=null,activeTab="overview",activePeriod="YTD";
+
+// ─── UTILS ──────────────────────────────────────────────────────────────────
+const f=n=>"€"+Math.round(n).toLocaleString("nl-NL");
+const fk=n=>Math.abs(n)>=1000000?"€"+(n/1000000).toFixed(1)+"M":Math.abs(n)>=1000?"€"+(n/1000).toFixed(0)+"k":f(n);
+const fp=n=>(n*100).toFixed(1)+"%";
+const fd=(a,b)=>b?((a-b)/b*100).toFixed(1):"0.0";
+
+function lr(v){
+  const n=v.length,sx=v.reduce((_,__,i)=>_+i,0),sy=v.reduce((s,x)=>s+x,0),
+        sxy=v.reduce((s,x,i)=>s+i*x,0),sx2=v.reduce((s,_,i)=>s+i*i,0),
+        sl=(n*sxy-sx*sy)/(n*sx2-sx*sx);
+  return{sl,ic:(sy-sl*sx)/n};
+}
+
+function mkFc(d,n){
+  const or=lr(d.map(r=>r.o)),kr=lr(d.map(r=>r.k)),cfr=lr(d.map(r=>r.cf||r.o*0.25));
+  const li=d.length-1,lm=MN.indexOf(d[d.length-1].m);
+  return Array.from({length:n},(_,i)=>{
+    const o=Math.max(0,Math.round(or.ic+or.sl*(li+i+1)));
+    const k=Math.max(0,Math.round(kr.ic+kr.sl*(li+i+1)));
+    const cf=Math.max(0,Math.round(cfr.ic+cfr.sl*(li+i+1)));
+    return{m:MN[(lm+i+1)%12],o,k,cf,fc:true};
+  });
+}
+
+function mkChart(id,cfg){
+  if(charts[id])charts[id].destroy();
+  const canvas = document.getElementById(id);
+  charts[id]=new Chart(canvas,cfg);
+  // Fade in na render
+  const wrap = canvas?.parentElement;
+  if(wrap?.classList.contains('chart-fade')){
+    setTimeout(()=>wrap.classList.add('loaded'),50);
+  }
+  return charts[id];
+}
+
+const chartDefaults={backgroundColor:"#0d1117",borderColor:"#1a1f2e",borderWidth:1,titleColor:"#4a5368",bodyColor:"#e2e8f8"};
+
+// ─── RENDER ─────────────────────────────────────────────────────────────────
+function render(){
+  const d=getPeriodData();
+  const l=d[d.length-1],p=d[d.length-2];
+  const fcd=mkFc(rev,fcM);
+  const tot=d.reduce((s,r)=>s+r.o,0);
+  const totK=d.reduce((s,r)=>s+r.k,0);
+  const totB=d.reduce((s,r)=>s+(r.b||0),0);
+  const totCF=d.reduce((s,r)=>s+(r.cf||r.o*0.25),0);
+  const mg=l?(l.o-l.k)/l.o:0;
+  const pmg=p?(p.o-p.k)/p.o:0;
+  const ebitda=l?((l.o-l.k)+(l.afschr||0)):0;
+  const pebitda=p?((p.o-p.k)+(p.afschr||0)):0;
+  const cf=l?(l.cf||l.o*0.25):0;
+  const pcf=p?(p.cf||p.o*0.25):0;
+  const jp=tot+fcd.reduce((s,r)=>s+r.o,0);
+  const budgetPct=totB?tot/totB*100:0;
+
+  // ── KPIs ──
+  setKpi("k1v","k1d",f(l?.o||0),fd(l?.o,p?.o),true,"bl");
+  setKpi("k2v","k2d",fp(mg),(mg-pmg)*100,true,mg>=.30?"up":"am",true);
+  setKpi("k3v","k3d",f(ebitda),fd(ebitda,pebitda),true,ebitda>=pebitda?"up":"dn");
+  setKpi("k4v","k4d",f(cf),fd(cf,pcf),true,cf>=pcf?"up":"dn");
+
+  document.getElementById("k5v").textContent=f(tot);
+  document.getElementById("k5s").textContent=d.length+" maanden · "+fk(tot/d.length)+"/mnd gem.";
+  document.getElementById("k6v").textContent=Math.round(budgetPct)+"%";
+  document.getElementById("k6d").textContent=(budgetPct>=100?"▲":"▼")+" "+Math.abs(Math.round(budgetPct-100))+"%";
+  document.getElementById("k6d").className="kpi-delta "+(budgetPct>=100?"up":"dn");
+  document.getElementById("k6p").style.width=Math.min(budgetPct,100)+"%";
+  document.getElementById("k6p").style.background=budgetPct>=100?"#34d399":"#4f8ef7";
+  document.getElementById("k7v").textContent=(balans.omzet12mnd>0?Math.round(balans.debiteuren/(balans.omzet12mnd/365)):"—")+" dgn";
+  const kr=totK/tot;
+  document.getElementById("k8v").textContent=fp(kr);
+  document.getElementById("k8d").textContent=(kr<.75?"▼ Goed":"▲ Let op");
+  document.getElementById("k8d").className="kpi-delta "+(kr<.75?"up":"dn");
+  document.getElementById("k9v").textContent=fk(jp);
+  document.getElementById("k9s").textContent=fcM+"M trend";
+
+  // Glow effects
+  setGlow("kg1","#4f8ef7");setGlow("kg2",mg>=.30?"#34d399":"#fbbf24");
+  setGlow("kg3",ebitda>=pebitda?"#34d399":"#f87171");setGlow("kg4",cf>=pcf?"#34d399":"#f87171");
+
+  // ── MAIN CHART ──
+  const cb=[...rev,...fcd];
+  const si=rev.length;
+  mkChart("mainChart",{type:"line",data:{labels:cb.map(r=>r.m+(r.fc?" (P)":"")),datasets:[
+    {label:"Omzet",data:cb.map(r=>r.o),borderColor:"#4f8ef7",backgroundColor:"#4f8ef710",fill:true,tension:.4,pointRadius:0,borderWidth:2,segment:{borderDash:ctx=>ctx.p0DataIndex>=si-1?[5,3]:undefined}},
+    {label:"Marge",data:cb.map(r=>r.o-r.k),borderColor:"#34d399",backgroundColor:"#34d39908",fill:true,tension:.4,pointRadius:0,borderWidth:2,segment:{borderDash:ctx=>ctx.p0DataIndex>=si-1?[5,3]:undefined}},
+    {label:"Kosten",data:cb.map(r=>r.k),borderColor:"#fbbf24",backgroundColor:"transparent",tension:.4,pointRadius:0,borderWidth:1.5,borderDash:[3,3]},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{display:false},tooltip:{...chartDefaults,callbacks:{label:c=>c.dataset.label+": "+f(c.raw)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+
+  document.getElementById("mainSub").textContent=rev.length+" maanden actueel + "+fcM+"M prognose · Totaal: "+f(tot);
+
+  // ── BUDGET CHART ──
+  mkChart("budgetChart",{type:"bar",data:{labels:d.map(r=>r.m),datasets:[
+    {label:"Budget",data:d.map(r=>r.b||r.o*0.95),backgroundColor:"#1a1f2e",borderRadius:3},
+    {label:"Realisatie",data:d.map(r=>r.o),backgroundColor:d.map(r=>r.o>=(r.b||r.o*0.95)?"#34d39980":"#f8717180"),borderRadius:3},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...chartDefaults,callbacks:{label:c=>c.dataset.label+": "+f(c.raw)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+
+  // ── KOSTEN CHART ──
+  mkChart("kostenChart",{type:"bar",data:{labels:d.map(r=>r.m),datasets:[{label:"Kosten",data:d.map(r=>r.k),backgroundColor:"#fbbf2480",borderRadius:3,barThickness:14}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...chartDefaults,callbacks:{label:c=>"Kosten: "+f(c.raw)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+
+  // ── PIE ──
+  renderPie("pieChart","pieLegend");
+  renderPie("pieChart2","pieLegend2");
+
+  // ── MAAND TABLE ──
+  const tbody=document.getElementById("maandBody");
+  tbody.innerHTML=d.map((r,i)=>{
+    const mg2=(r.o-r.k)/r.o;
+    const ebt=r.o*mg2*0.85;
+    const prev2=d[i-1];
+    const dO=prev2?fd(r.o,prev2.o):null;
+    const bOk=r.o>=(r.b||r.o);
+    return`<tr>
+      <td style="color:#e2e8f8;font-weight:600">${r.m}</td>
+      <td class="td-val">${f(r.o)}</td>
+      <td class="td-val" style="color:${bOk?"#34d399":"#f87171"}">${f(r.b||Math.round(r.o*0.95))}</td>
+      <td class="td-val" style="color:#fbbf24">${f(r.k)}</td>
+      <td class="td-val" style="color:#34d399">${f(r.o-r.k)}</td>
+      <td class="td-val ${mg2>=.30?"up":"am"}">${fp(mg2)}</td>
+      <td class="td-val">${f(ebt)}</td>
+      <td class="td-delta ${dO===null?"nt":dO>=0?"up":"dn"}">${dO===null?"—":(dO>=0?"▲":"▼")+" "+Math.abs(dO)+"%"}</td>
+    </tr>`;
+  }).join("");
+
+  // ── P&L CHARTS ──
+  if(activeTab==="pnl"){
+    mkChart("pnlChart",{type:"bar",data:{labels:d.map(r=>r.m),datasets:[{label:"Omzet",data:d.map(r=>r.o),backgroundColor:"#4f8ef780",borderRadius:3},{label:"Kosten",data:d.map(r=>r.k),backgroundColor:"#f8717160",borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#8892aa",font:{size:10}},position:"top"},tooltip:{...chartDefaults,callbacks:{label:c=>c.dataset.label+": "+f(c.raw)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+    mkChart("margeChart",{type:"line",data:{labels:d.map(r=>r.m),datasets:[{label:"Marge %",data:d.map(r=>((r.o-r.k)/r.o*100).toFixed(1)),borderColor:"#34d399",backgroundColor:"#34d39915",fill:true,tension:.4,pointRadius:3,pointBackgroundColor:"#34d399",borderWidth:2},{label:"Doel 30%",data:d.map(()=>30),borderColor:"#f8717160",borderDash:[4,4],pointRadius:0,borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#8892aa",font:{size:10}},position:"top"},tooltip:{...chartDefaults}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>v+"%"},min:0,max:50}}}});
+    const pnlRows=[
+      {l:"Netto omzet",v:tot,b:totB,pct:1},
+      {l:"Inkoopkosten",v:-totK*0.35,b:-totB*0.36,pct:totK*0.35/tot},
+      {l:"Bruto marge",v:tot-totK*0.35,b:null,pct:(tot-totK*0.35)/tot,bold:true},
+      {l:"Personeelskosten",v:-totK*0.55,b:-totB*0.54,pct:totK*0.55/tot},
+      {l:"Huisvestingskosten",v:-totK*0.10,b:-totB*0.10,pct:totK*0.10/tot},
+      {l:"Overige kosten",v:-totK*0.05,b:-totB*0.06,pct:totK*0.05/tot},
+      {l:"EBITDA",v:tot*mg*0.85,b:null,pct:mg*0.85,bold:true},
+    ];
+    document.getElementById("pnlBody").innerHTML=pnlRows.map(r=>`<tr><td style="${r.bold?"color:#e2e8f8;font-weight:700":""}">${r.l}</td><td class="td-val" style="${r.v>=0?"color:#34d399":"color:#f87171"}">${f(r.v)}</td><td class="td-val">${fp(r.pct)}</td><td class="td-val ${r.b===null?"nt":r.v>=r.b?"up":"dn"}">${r.b===null?"—":(r.v>=r.b?"▲":"▼")+" "+Math.abs(fd(r.v,r.b))+"%"}</td></tr>`).join("");
+  }
+
+  // ── CASHFLOW ──
+  if(activeTab==="cashflow"){
+    const cfData=d.map(r=>r.cf||0);
+    mkChart("cfChart",{type:"bar",data:{labels:d.map(r=>r.m),datasets:[{label:"Cashflow",data:cfData,backgroundColor:cfData.map(v=>v>=0?"#34d39970":"#f8717170"),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...chartDefaults,callbacks:{label:c=>"CF: "+f(c.raw)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+
+    // Real balans values
+    const vlottend = balans.debiteuren + balans.kas + balans.voorraad + balans.overigeVlot;
+    const kortSchulden = balans.crediteuren + balans.belasting + balans.overigeKort;
+    const currentRatio = kortSchulden > 0 ? vlottend / kortSchulden : 0;
+    const werkkapitaal = vlottend - kortSchulden;
+    const dso = balans.omzet12mnd > 0 ? Math.round(balans.debiteuren / (balans.omzet12mnd / 365)) : 0;
+    const avgMaandKosten = totK / d.length;
+    const kasDekking = avgMaandKosten > 0 ? balans.kas / avgMaandKosten : 0;
+
+    document.getElementById("cf1").textContent=f(totCF);
+    document.getElementById("cf2").textContent=f(totCF*0.85);
+    document.getElementById("cf3").textContent=f(balans.kas);
+    document.getElementById("cf4").textContent=f(avgMaandKosten);
+
+    document.getElementById("cr1").textContent=currentRatio.toFixed(1)+"x";
+    document.getElementById("crp1").style.width=Math.min(currentRatio/3*100,100)+"%";
+    document.getElementById("crp1").style.background=currentRatio>=1.5?"#34d399":currentRatio>=1?"#fbbf24":"#f87171";
+    document.getElementById("cr1").style.color=currentRatio>=1.5?"#34d399":currentRatio>=1?"#fbbf24":"#f87171";
+
+    document.getElementById("cr2").textContent=kasDekking.toFixed(1)+" mnd";
+    document.getElementById("crp2").style.width=Math.min(kasDekking/6*100,100)+"%";
+
+    document.getElementById("cr3").textContent=dso+" dgn";
+    document.getElementById("crp3").style.width=Math.min(dso/90*100,100)+"%";
+    document.getElementById("crp3").style.background=dso<=30?"#34d399":dso<=60?"#fbbf24":"#f87171";
+    document.getElementById("cr3").style.color=dso<=30?"#34d399":dso<=60?"#fbbf24":"#f87171";
+
+    const wkRatio = kortSchulden > 0 ? vlottend/kortSchulden : 0;
+    document.getElementById("cr4").textContent=wkRatio.toFixed(1)+"x";
+    document.getElementById("crp4").style.width=Math.min(wkRatio/3*100,100)+"%";
+    document.getElementById("crp4").style.background=wkRatio>=1.5?"#a78bfa":"#fbbf24";
+  }
+
+  // ── FORECAST ──
+  if(activeTab==="forecast"){
+    renderForecast();
+    const jp2=tot+fcd.reduce((s,r)=>s+r.o,0);
+    document.getElementById("sc1").textContent=fk(jp2*1.15);
+    document.getElementById("sc2").textContent=fk(jp2);
+    document.getElementById("sc3").textContent=fk(jp2*0.85);
+    // Scenario chart
+    const scLab=[...rev.map(r=>r.m),...fcd.map(r=>r.m+" (P)")];
+    mkChart("scenChart",{type:"line",data:{labels:scLab,datasets:[
+      {label:"Optimistisch",data:[...rev.map(r=>null),...fcd.map(r=>Math.round(r.o*1.15))],borderColor:"#34d39970",borderDash:[4,2],pointRadius:0,borderWidth:1.5,spanGaps:true},
+      {label:"Realistisch",data:[...rev.map(r=>r.o),...fcd.map(r=>r.o)],borderColor:"#a78bfa",pointRadius:0,borderWidth:2,tension:.4},
+      {label:"Pessimistisch",data:[...rev.map(r=>null),...fcd.map(r=>Math.round(r.o*0.85))],borderColor:"#f8717170",borderDash:[4,2],pointRadius:0,borderWidth:1.5,spanGaps:true},
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#8892aa",font:{size:10}},position:"top"},tooltip:{...chartDefaults,callbacks:{label:c=>c.dataset.label+": "+fk(c.raw||0)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+    mkChart("fcChart",{type:"line",data:{labels:[...rev,...fcd].map(r=>r.m+(r.fc?" (P)":"")),datasets:[
+      {label:"Omzet",data:[...rev,...fcd].map(r=>r.o),borderColor:"#4f8ef7",backgroundColor:"#4f8ef710",fill:true,tension:.4,pointRadius:0,borderWidth:2,segment:{borderDash:ctx=>ctx.p0DataIndex>=rev.length-1?[5,3]:undefined}},
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...chartDefaults,callbacks:{label:c=>"Omzet: "+f(c.raw)}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9}}},y:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}}}}});
+  }
+
+  // ── KOSTEN TAB ──
+  if(activeTab==="costs"){
+    const tk=kost.reduce((s,k)=>s+k.v,0);
+    mkChart("kostenBarChart",{type:"bar",data:{labels:kost.map(k=>k.n),datasets:[{label:"Bedrag",data:kost.map(k=>k.v),backgroundColor:PC,borderRadius:4}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...chartDefaults,callbacks:{label:c=>"€"+Math.round(c.raw).toLocaleString("nl-NL")+" ("+Math.round(c.raw/tk*100)+"%)"}}},scales:{x:{grid:{color:"#1a1f2e"},ticks:{color:"#4a5368",font:{size:9},callback:v=>fk(v)}},y:{grid:{color:"transparent"},ticks:{color:"#8892aa",font:{size:10}}}}}});
+    renderPie("pieChart2","pieLegend2");
+    const lastO=rev[rev.length-1]?.o||1;
+    document.getElementById("kostenBody").innerHTML=kost.map((k,i)=>`<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:${PC[i]};flex-shrink:0"></div><span style="color:#e2e8f8">${k.n}</span></div></td><td class="td-val">${f(k.v)}</td><td class="td-val">${Math.round(k.v/tk*100)}%</td><td class="td-val ${k.v/lastO<.15?"up":"am"}">${fp(k.v/lastO)}</td><td class="td-delta nt">—</td></tr>`).join("");
+  }
+
+  // ── INSIGHTS ──
+  renderInsights(l,p,mg,pmg,tot,fcd);
+
+  // ── FOOTER ──
+  document.getElementById("footerDate").textContent=new Date().toLocaleDateString("nl-NL",{day:"numeric",month:"long",year:"numeric"});
+}
+
+function renderPie(cid,lid){
+  const tk=kost.reduce((s,k)=>s+k.v,0);
+  mkChart(cid,{type:"doughnut",data:{labels:kost.map(k=>k.n),datasets:[{data:kost.map(k=>k.v),backgroundColor:PC,borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"65%",plugins:{legend:{display:false},tooltip:{...chartDefaults,callbacks:{label:c=>c.label+": "+f(c.raw)+" ("+Math.round(c.raw/tk*100)+"%)"}}}}}); 
+  document.getElementById(lid).innerHTML=kost.map((k,i)=>`<div class="leg-item"><div class="leg-dot" style="background:${PC[i]}"></div><span class="leg-name">${k.n}</span><span class="leg-pct">${Math.round(k.v/tk*100)}%</span><span class="leg-val">${fk(k.v)}</span></div>`).join("");
+}
+
+function renderForecast(){
+  const fcd=mkFc(rev,fcM);
+  const lastO=rev[rev.length-1]?.o||0;
+  document.getElementById("fcGrid").style.gridTemplateColumns=`repeat(${fcM<=3?3:fcM<=6?6:12},1fr)`;
+  document.getElementById("fcGrid").innerHTML=fcd.map(m=>{
+    const mg2=(m.o-m.k)/m.o;
+    return`<div class="fc-month">
+      <div class="fc-mlabel">${m.m}</div>
+      <div class="fc-row"><div class="fc-rl">Omzet</div><div class="fc-rv bl">${f(m.o)}</div></div>
+      <div class="fc-row"><div class="fc-rl">Kosten</div><div class="fc-rv am">${f(m.k)}</div></div>
+      <div class="fc-row"><div class="fc-rl">Marge</div><div class="fc-rv ${mg2>=.30?"up":"dn"}">${f(m.o-m.k)} <span style="font-size:10px">${fp(mg2)}</span></div></div>
+      <div class="fc-row"><div class="fc-rl">Cashflow</div><div class="fc-rv up">${f(m.cf)}</div></div>
+      <div class="fc-row"><div class="fc-rl">Δ vs huidig</div><div class="fc-rv ${m.o>=lastO?"up":"dn"}">${m.o>=lastO?"▲":"▼"} ${Math.abs(fd(m.o,lastO))}%</div></div>
+    </div>`;
+  }).join("");
+}
+
+function renderInsights(l,p,mg,pmg,tot,fcd){
+  if(!l)return;
+  const tk=kost.reduce((s,k)=>s+k.v,0);
+  const ins=[
+    {pos:l.o>=(p?.o||0),text:`Omzet ${l.m}: ${f(l.o)} — ${l.o>=(p?.o||0)?"+":""}${fd(l.o,p?.o)}% t.o.v. vorige maand. YTD totaal: ${f(tot)}.`},
+    {pos:mg>=.30,text:`Bruto marge ${fp(mg)} — ${mg>=.30?"✓ boven":"⚠ onder"} de 30%-drempel. ${mg<.30?"Kostenbeheersing vereist.":""}`},
+    {pos:fcd[0]?.o>=l.o,text:`Prognose volgende maand: ${f(fcd[0]?.o||0)} omzet · ${f(fcd[0]?.o-fcd[0]?.k||0)} marge. ${(fcd[0]?.o-fcd[0]?.k)/fcd[0]?.o>=.30?"Op koers.":"Margedruk verwacht."}`},
+    {pos:true,text:`Grootste kostenpost: ${kost[0]?.n} (${Math.round(kost[0]?.v/tk*100)}% · ${f(kost[0]?.v)}). Monitor maandelijks op afwijkingen.`},
+    {pos:l.o>=(l.b||l.o),text:`Budget realisatie: ${Math.round(l.o/(l.b||l.o)*100)}% van doelstelling. ${l.o>=(l.b||l.o)?"✓ Op of boven budget.":"⚠ Onder budget."}`},
+  ];
+  clearInterval(iTimer);
+  const dots=document.getElementById("iDots");
+  dots.innerHTML=ins.map((_,i)=>`<div onclick="goIns(${i})" style="width:${i===0?18:4}px;height:4px;border-radius:2px;background:${i===0?"#4f8ef7":"#1a1f2e"};cursor:pointer;transition:all .3s" id="idot${i}"></div>`).join("");
+  window._ins=ins;
+  function showIns(idx){
+    const x=ins[idx%ins.length];
+    document.getElementById("iText").textContent=x.text;
+    const d=document.getElementById("iDot");d.style.background=x.pos?"#34d399":"#f87171";d.style.boxShadow=`0 0 6px ${x.pos?"#34d399":"#f87171"}`;
+    ins.forEach((_,i)=>{const el=document.getElementById("idot"+i);if(el){el.style.width=i===idx?"18px":"4px";el.style.background=i===idx?"#4f8ef7":"#1a1f2e";}});
+  }
+  window.goIns=idx=>{iIdx=idx;showIns(idx);};
+  showIns(0);iTimer=setInterval(()=>{iIdx=(iIdx+1)%ins.length;showIns(iIdx);},5000);
+}
+
+function setKpi(vid,did,val,delta,posIsUp,color,isPp=false){
+  document.getElementById(vid).textContent=val;
+  document.getElementById(vid).className="kpi-value "+color;
+  const pos=posIsUp?delta>=0:delta<=0;
+  const el=document.getElementById(did);
+  el.textContent=(delta>=0?"+":"")+delta+(isPp?"pp":"%");
+  el.className="kpi-delta "+(pos?"up":"dn");
+}
+
+function setGlow(id,color){
+  document.getElementById(id).style.background=`radial-gradient(circle at top right, ${color}10, transparent 70%)`;
+}
+
+function getPeriodData(){
+  if(activePeriod==="MTD")return[rev[rev.length-1]].filter(Boolean);
+  if(activePeriod==="YTD")return rev.slice(-Math.min(rev.length,12));
+  return rev;
+}
+
+// ─── TABS & CONTROLS ────────────────────────────────────────────────────────
+function showTab(t){
+  document.querySelectorAll("[id^='tab-']").forEach(el=>el.style.display="none");
+  document.querySelectorAll(".nav-tab").forEach(el=>el.classList.remove("active"));
+  document.getElementById("tab-"+t).style.display="block";
+  document.getElementById("tab-"+t).classList.add("animate");
+  document.querySelectorAll(".nav-tab").forEach(el=>{if(el.textContent.toLowerCase().includes(t.substring(0,3))||el.onclick?.toString().includes(t))el.classList.add("active");});
+  activeTab=t;
+  render();
+}
+
+function setPeriod(p){
+  activePeriod=p;
+  document.querySelectorAll(".period-btn").forEach(b=>b.classList.toggle("active",b.textContent===p));
+  render();
+}
+
+function setFcMonths(n,btn){
+  fcM=n;
+  document.querySelectorAll(".fc-tab").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  renderForecast();
+  render();
+}
+
+// ─── FILE UPLOAD ────────────────────────────────────────────────────────────
+function dropFiles(files){
+  if(!files||!files.length) return;
+  const file = files[0];
+  if(!file.name.match(/\.xlsx?$/i)){
+    alert("Gebruik een .xlsx of .xls bestand.");
+    return;
+  }
+  // Geef bestand door aan handleFile via fake event
+  handleFile({target:{files:files}});
+}
+
+function handleFile(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:"array"});
+      // Zoek datasheet — Dagdata of Maanddata
+      const ws1name = wb.SheetNames.find(n=>
+        /dagdata|maanddata/i.test(n)
+      ) || wb.SheetNames[0];
+
+      // Lees data — XLSX.js gebruikt rij 1 als kolomnamen
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[ws1name], {defval:null, raw:true});
+      if(!rows.length){
+        alert("Geen data gevonden. Controleer of het bestand de kolommen Datum/Maand en Omzet bevat.");
+        return;
+      }
+
+      // Hulpfunctie: converteer Excel datum (nummer of string) naar "MMM"
+      function excelDatumNaarMaand(val){
+        if(val===null||val===undefined) return null;
+        // String formaat DD-MM-YYYY
+        if(typeof val==="string"){
+          const parts = val.split("-");
+          if(parts.length===3){
+            const mIdx = parts[0].length===4 ? parseInt(parts[1])-1 : parseInt(parts[1])-1;
+            return {mIdx, jaar: parseInt(parts[0].length===4?parts[0]:parts[2]), datum:val};
+          }
+        }
+        // Excel serieel getal (datum opgeslagen als nummer)
+        if(typeof val==="number"){
+          const d = new Date((val - 25569) * 86400 * 1000);
+          return {mIdx: d.getMonth(), jaar: d.getFullYear(),
+                  datum:`${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}-${d.getFullYear()}`};
+        }
+        // JavaScript Date object
+        if(val instanceof Date){
+          return {mIdx: val.getMonth(), jaar: val.getFullYear(),
+                  datum:`${String(val.getDate()).padStart(2,"0")}-${String(val.getMonth()+1).padStart(2,"0")}-${val.getFullYear()}`};
+        }
+        return null;
+      }
+
+      // Detecteer dagdata of maanddata
+      const firstRow = rows[0];
+      const firstKey = Object.keys(firstRow)[0];
+      const firstVal = firstRow[firstKey];
+      const isDag = excelDatumNaarMaand(firstVal) !== null;
+      window._isDagData = isDag;
+
+      if(isDag){
+        // Dagdata: aggregeer per maand
+        const maandNamen = ["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
+        const maandMap = {};
+        const dagRows = [];
+
+        rows.forEach(r=>{
+          const datumKey = Object.keys(r)[0];
+          const datumInfo = excelDatumNaarMaand(r[datumKey]);
+          if(!datumInfo) return;
+          const o = parseFloat(r["Omzet"]||r["Omzet (€)"]||r["omzet"]||0);
+          const k = parseFloat(r["Kosten"]||r["Kosten (€)"]||r["kosten"]||0);
+          const b = parseFloat(r["Budget"]||r["Budget (€)"]||r["budget"]||0)||0;
+          const cf = parseFloat(r["Cashflow"]||r["Cashflow (€)"]||r["cashflow"]||0)||0;
+          if(!o) return;
+
+          dagRows.push({datum:datumInfo.datum, o, k, b, cf});
+
+          const key = `${datumInfo.jaar}-${String(datumInfo.mIdx+1).padStart(2,"0")}`;
+          if(!maandMap[key]) maandMap[key]={m:maandNamen[datumInfo.mIdx],o:0,k:0,b:0,cf:0,jaar:datumInfo.jaar,mIdx:datumInfo.mIdx};
+          maandMap[key].o += o;
+          maandMap[key].k += k;
+          maandMap[key].b += b;
+          maandMap[key].cf += cf;
+        });
+
+        if(!dagRows.length){alert("Geen geldige dagdata gevonden. Controleer of Datum en Omzet kolommen zijn ingevuld.");return;}
+        window._dagData = dagRows;
+        rev = Object.values(maandMap)
+          .sort((a,b)=>a.jaar*12+a.mIdx-(b.jaar*12+b.mIdx))
+          .map(r=>({...r, b:r.b||undefined, cf:r.cf||undefined}));
+      } else {
+        // Maanddata
+        const maandNamen = ["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
+        const ld = rows.map(r=>({
+          m:String(r["Maand"]||r["maand"]||Object.values(r)[0]),
+          o:parseFloat(r["Omzet (€)"]||r["Omzet"]||r["omzet"]||0),
+          k:parseFloat(r["Kosten (€)"]||r["Kosten"]||r["kosten"]||0),
+          b:parseFloat(r["Budget (€)"]||r["Budget"]||r["budget"]||0)||undefined,
+          cf:parseFloat(r["Cashflow (€)"]||r["Cashflow"]||r["cashflow"]||0)||undefined,
+          afschr:parseFloat(r["Afschrijv. (€)"]||r["Afschrijvingen"]||0)||0,
+        })).filter(r=>r.o>0);
+        if(!ld.length){alert("Geen data gevonden. Controleer of Maand en Omzet kolommen zijn ingevuld.");return;}
+        rev = ld;
+        window._dagData = null;
+      }
+
+      const ws2name=wb.SheetNames.find(n=>n.includes("Kostendata")||n.includes("kostendata")||n.toLowerCase().includes("kosten"));
+      if(ws2name){
+        const r2=XLSX.utils.sheet_to_json(wb.Sheets[ws2name],{defval:null});
+        const k2=r2.map(r=>({n:String(r["Categorie"]||r["categorie"]||Object.values(r)[0]),v:parseFloat(r["Bedrag"]||r["Bedrag (€)"]||r["bedrag"]||0)})).filter(r=>r.v>0);
+        if(k2.length)kost=k2;
+      }
+
+      const ws3name=wb.SheetNames.find(n=>n.includes("Balans")||n.includes("balans"));
+      if(ws3name){
+        const r3=XLSX.utils.sheet_to_json(wb.Sheets[ws3name],{defval:null,header:1});
+        const bm={};
+        r3.forEach(row=>{if(row[0]&&row[1]!==null&&!isNaN(parseFloat(row[1])))bm[String(row[0]).trim()]=parseFloat(row[1]);});
+        balans={
+          debiteuren:bm["Debiteuren (openstaande facturen)"]||0,
+          kas:bm["Kas & Banktegoeden"]||0,
+          voorraad:bm["Voorraad"]||0,
+          overigeVlot:bm["Overige vlottende activa"]||0,
+          crediteuren:bm["Crediteuren (te betalen facturen)"]||0,
+          belasting:bm["Belastingschulden (BTW, LB)"]||0,
+          overigeKort:bm["Overige kortlopende schulden"]||0,
+          omzet12mnd:bm["Omzet afgelopen 12 maanden (€)"]||0,
+        };
+      }
+
+      // Sla op en toon dashboard
+      localStorage.setItem("finflowapp_data_"+(window._userSession||"user"),"1");
+      document.getElementById("welcomeScreen").style.display="none";
+      document.getElementById("dashboardContent").style.display="block";
+      document.getElementById("uploadZone").style.display="none";
+      document.getElementById("successBar").style.display="flex";
+      document.getElementById("successName").textContent=file.name;
+      document.getElementById("dataBadge").textContent=window._isDagData?"DAG DATA":"LIVE DATA";
+      document.getElementById("dataBadge").className="badge badge-green";
+      document.getElementById("companyName").textContent=file.name.replace(/\.(xlsx|xls)$/i,"");
+      // footerInfo not needed
+      render();
+    }catch(err){alert("Fout bij inlezen: "+err.message);}
+  };r.readAsArrayBuffer(file);
+}
+
+
+function dlTemplate(){
+  // Genereer sjabloon via XLSX.js — geen serverbestand nodig
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Dagdata
+  const today = new Date();
+  const rows = [["Datum","Omzet (€)","Budget (€)","Kosten (€)","Cashflow (€)"]];
+  for(let i=89;i>=0;i--){
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yyyy = d.getFullYear();
+    const wd = d.getDay();
+    const isWeekend = wd===0||wd===6;
+    const omzet = isWeekend ? Math.round(500+Math.random()*1000) : Math.round(3000+Math.random()*2500);
+    const kosten = Math.round(omzet*( 0.62+Math.random()*0.1));
+    const cf = Math.round(omzet*( 0.18+Math.random()*0.12));
+    rows.push([`${dd}-${mm}-${yyyy}`, omzet, Math.round(omzet*1.05), kosten, cf]);
+  }
+  // Voeg 30 lege rijen toe voor toekomstige data
+  for(let i=1;i<=30;i++){
+    const d = new Date(today); d.setDate(d.getDate()+i);
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yyyy = d.getFullYear();
+    rows.push([`${dd}-${mm}-${yyyy}`,"","","",""]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Dagdata");
+
+  // Sheet 2: Kostendata
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["Categorie","Bedrag (€)","Budget (€)","Toelichting"],
+    ["Personeelskosten",44200,46000,"Salarissen, sociale lasten, pensioen"],
+    ["Inkoopkosten / COGS",19300,20000,"Materiaal, inkoop goederen"],
+    ["Huisvestingskosten",8100,8000,"Huur, energie, schoonmaak"],
+    ["Marketing & Sales",4900,6000,"Advertenties, events, CRM"],
+    ["ICT & Software",2800,3000,"Licenties, hosting, hardware"],
+    ["Financiële kosten",1200,1500,"Accountant, bank, verzekering"],
+    ["Afschrijvingen",1400,1400,"Inventaris, machines"],
+    ["Overige kosten",900,1000,"Overige operationele kosten"],
+  ]), "Kostendata");
+
+  // Sheet 3: Balans
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["Balanspost","Huidig bedrag (€)","Vorige periode (€)","Toelichting"],
+    ["VLOTTENDE ACTIVA","","",""],
+    ["Debiteuren (openstaande facturen)",48500,42300,"Openstaande vorderingen"],
+    ["Kas & Banktegoeden",32000,28500,"Liquide middelen"],
+    ["Voorraad",15200,17800,"Aanwezige voorraad"],
+    ["Overige vlottende activa",4800,3900,"Vooruitbetaalde kosten"],
+    ["KORTLOPENDE SCHULDEN","","",""],
+    ["Crediteuren (te betalen facturen)",22400,19800,"Schulden aan leveranciers"],
+    ["Belastingschulden (BTW, LB)",8200,7600,"Te betalen belastingen"],
+    ["Overige kortlopende schulden",3100,2800,"Overige schulden < 1 jaar"],
+    ["AANVULLENDE INFORMATIE","","",""],
+    ["Omzet afgelopen 12 maanden (€)",1180000,1050000,"Voor DSO-berekening"],
+  ]), "Balans");
+
+  XLSX.writeFile(wb, "FinFlowApp_Sjabloon.xlsx");
+}
+
+function resetData(){
+  rev=[...DR];kost=[...DK];
+  balans={debiteuren:48500,kas:32000,voorraad:15200,overigeVlot:4800,crediteuren:22400,belasting:8200,overigeKort:3100,omzet12mnd:1180000};
+  rev=[...DR];kost=[...DK];
+  balans={debiteuren:48500,kas:32000,voorraad:15200,overigeVlot:4800,crediteuren:22400,belasting:8200,overigeKort:3100,omzet12mnd:1180000};
+  localStorage.removeItem('finflowapp_data_'+(window._userSession||'user'));
+  document.getElementById("fi").value="";
+  document.getElementById("successBar").style.display="none";
+  document.getElementById("uploadZone").style.display="flex";
+  document.getElementById("dataBadge").textContent="DEMO";
+  document.getElementById("dataBadge").className="badge badge-blue";
+  document.getElementById("companyName").textContent="Demo — Bakker & Zonen B.V.";
+  document.getElementById("footerInfo").textContent="Demo data";
+}
+
+function exportPDF(){
+  const cn = document.getElementById("companyName").textContent;
+  const dt = new Date().toLocaleDateString("nl-NL",{day:"numeric",month:"long",year:"numeric"});
+  // Voeg tijdelijke print-info toe
+  let info = document.getElementById("printInfo");
+  if(!info){
+    info = document.createElement("div");
+    info.id = "printInfo";
+    info.className = "print-info";
+    document.querySelector(".content").prepend(info);
+  }
+  info.textContent = cn + " · FinFlowApp rapport · " + dt;
+  info.style.display = "block";
+  // Print
+  window.print();
+  // Verberg na print
+  info.style.display = "none";
+}
+
+// Nav tab click fix
+document.querySelectorAll(".nav-tab").forEach((btn,i)=>{
+  const tabs=["overview","pnl","cashflow","forecast","costs"];
+  btn.onclick=()=>showTab(tabs[i]);
+});
+
+window.onload=function(){
+  _sb.auth.getSession().then(({data:{session}})=>{
+    if(!session){ window.location.href="login.html"; return; }
+    const uid = session.user.id;
+    window._userSession = uid;
+    // Update UI
+    setTimeout(()=>{
+      const profile = window._userProfile;
+      const cn = document.getElementById("companyName");
+      if(cn) cn.textContent = profile?.company || session.user.email || "Dashboard";
+      const av = document.getElementById("userAvatar");
+      if(av) av.textContent = (profile?.first_name || session.user.email || "U").charAt(0).toUpperCase();
+    }, 300);
+    // Check data
+    const hasData = localStorage.getItem("finflowapp_data_" + uid);
+    const ls = document.getElementById("loadingScreen");
+    const delay = Math.max(0, 800 - (Date.now() - (window._spinnerStart||Date.now())));
+    setTimeout(()=>{
+      if(ls) ls.style.display="none";
+      if(!hasData){
+        // Nieuw account: toon welkomstscherm
+        document.getElementById("welcomeScreen").style.display="block";
+        document.getElementById("dashboardContent").style.display="none";
+      } else {
+        // Bestaand account: toon dashboard met upload zone
+        document.getElementById("welcomeScreen").style.display="none";
+        document.getElementById("dashboardContent").style.display="block";
+        document.getElementById("uploadZone").style.display="flex";
+        document.getElementById("successBar").style.display="none";
+        render();
+      }
+    }, delay);
+  });
+};
+
+function showWelcome(){
+  document.getElementById("welcomeScreen").style.display="block";
+  document.getElementById("dashboardContent").style.display="none";
+  localStorage.removeItem("finflowapp_data_"+(window._userSession||"user"));
+}
+
+function hideWelcome(){
+  document.getElementById("welcomeScreen").style.display="none";
+  document.getElementById("dashboardContent").style.display="block";
+  document.getElementById("uploadZone").style.display="flex";
+  document.getElementById("successBar").style.display="none";
+  showTab("overview");
+}
+
+</script>
+</body>
+</html>
